@@ -1446,7 +1446,7 @@ body.mode-tablet .modal { max-width: 520px !important; border-radius: 20px !impo
   <div style="background:white;border-radius:24px;padding:32px 24px;width:100%;max-width:440px;box-shadow:0 24px 80px rgba(0,0,0,0.4);text-align:center;max-height:90vh;overflow-y:auto">
     <div style="font-size:22px;font-weight:800;color:#0a1628;margin-bottom:8px">¿Cómo vas a usar FlowCash?</div>
     <div style="font-size:14px;color:#64748b;margin-bottom:20px;line-height:1.5">Elegí la interfaz que mejor se adapte a tu dispositivo.<br>Podés cambiarlo después desde Configuración.</div>
-    <div id="device-detected-label" style="font-size:12px;color:#2563eb;font-weight:600;margin-bottom:20px;padding:8px 16px;background:#eff6ff;border-radius:999px;display:inline-block">🔍 Detectando dispositivo...</div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:20px">
       <div id="opt-mobile" onclick="selectDevice('mobile',this)" style="border:2px solid #e2e8f0;border-radius:14px;padding:18px 10px;cursor:pointer;transition:all 0.2s;background:white">
         <div style="font-size:28px;margin-bottom:6px">📱</div>
@@ -2309,16 +2309,17 @@ function selectDevice(mode) {
   });
 }
 
+function showDevicePicker() {
+  // Pre-select mobile by default
+  selectDevice('mobile');
+  document.getElementById('device-picker').style.display = 'flex';
+}
+
 function confirmDevice() {
-  localStorage.setItem('flowcash_device_mode', selectedDeviceMode);
   applyDeviceMode(selectedDeviceMode);
   document.getElementById('device-picker').style.display = 'none';
-  // Now show auth or app depending on firebase state
-  if (window._firebaseUser) {
-    handleAuthUser(window._firebaseUser);
-  } else {
-    document.getElementById('auth-screen').style.display = 'flex';
-  }
+  // Show auth screen always — user must log in every time
+  document.getElementById('auth-screen').style.display = 'flex';
 }
 
 function changeDeviceMode(mode) {
@@ -2494,13 +2495,9 @@ function switchTab(t) {
 
 // Escucha cambios de sesión automáticamente
 auth.onAuthStateChanged(async (user) => {
+  // Store Firebase user but don't auto-navigate
+  // User must go through picker → login every time
   window._firebaseUser = user || null;
-  // If splash/picker still showing, wait — confirmDevice or initApp will handle it
-  const splash = document.getElementById('splash-screen');
-  const picker = document.getElementById('device-picker');
-  if (splash && splash.style.display !== 'none') return;
-  if (picker && picker.style.display === 'flex') return;
-  await handleAuthUser(user);
 });
 
 async function handleAuthUser(user) {
@@ -5198,33 +5195,20 @@ function showToast(msg) {
 }
 
 // ══════════════════════════════════════════════
-//  INIT
+//  INIT — siempre muestra el picker al entrar
 // ══════════════════════════════════════════════
 loadSavedTheme();
 setupPWA();
 initKeyboardShortcuts();
 
-// Show splash for 1.5s, then device picker or auth
+// Splash 1.5s → siempre muestra el picker de interfaz
 setTimeout(() => {
   const splash = document.getElementById('splash-screen');
   splash.style.opacity = '0';
   splash.style.transition = 'opacity 0.4s';
   setTimeout(() => {
     splash.style.display = 'none';
-    const saved = localStorage.getItem('flowcash_device_mode');
-    if (saved) {
-      applyDeviceMode(saved);
-      // Firebase auth state already handled by onAuthStateChanged
-      // If user is already known, handle now
-      handleAuthUser(window._firebaseUser);
-    } else {
-      // First time — show device picker
-      const detected = detectDevice();
-      selectDevice(detected);
-      const label = document.getElementById('device-detected-label');
-      if (label) label.textContent = getOSLabel() + ' — ' + (detected==='mobile'?'Móvil':detected==='tablet'?'Tablet':'Escritorio') + ' sugerido';
-      document.getElementById('device-picker').style.display = 'flex';
-    }
+    showDevicePicker();
   }, 400);
 }, 1500);
 
