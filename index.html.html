@@ -963,7 +963,9 @@ body {
   transition: right 0.3s ease;
   overflow-y: auto;
   padding: 24px 20px 40px;
+  visibility: hidden;
 }
+.theme-panel.open { right: 0; visibility: visible; }
 .theme-panel.open { right: 0; }
 .theme-overlay {
   position: fixed; inset: 0;
@@ -1391,31 +1393,34 @@ body.mode-tablet .modal { max-width: 520px !important; border-radius: 20px !impo
 }
 
 
-/* Ensure hidden fixed elements take zero space */
-#device-picker[style*="display:none"],
-#splash-screen[style*="display:none"],
-.modal-overlay:not(.open),
-.theme-panel:not(.open),
-.theme-overlay:not(.open),
-#notif-overlay:not(.open),
-#notif-panel:not(.open) {
-  pointer-events: none;
-  visibility: hidden;
-}
-
-/* App layout fix */
+/* App layout */
 .app-layout {
   display: flex;
   min-height: calc(100vh - 64px);
 }
-
 .main-content {
   flex: 1;
-  overflow-y: auto;
   padding: 24px 20px 100px;
   max-width: 900px;
   margin: 0 auto;
   width: 100%;
+}
+
+
+/* ALL panels and overlays hidden by default */
+.theme-overlay,
+.theme-panel,
+#notif-overlay,
+#notif-panel {
+  display: none;
+}
+.theme-overlay.open,
+#notif-overlay.open {
+  display: block;
+}
+.theme-panel.open,
+#notif-panel.open {
+  display: block;
 }
 
 </style>
@@ -2536,8 +2541,8 @@ async function doLogin() {
   try {
     await auth.signInWithEmailAndPassword(email, pass);
   } catch(e) {
-    showToast(e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found'
-      ? 'Email o contraseña incorrectos' : 'Error al ingresar');
+    const badCodes = ['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-email'];
+    showToast(badCodes.includes(e.code) ? 'Email o contraseña incorrectos' : 'Error al ingresar: ' + (e.message||e.code));
     btn.disabled = false; btn.textContent = 'Entrar';
   }
 }
@@ -4331,10 +4336,20 @@ function openNotifPanel() {
           <div class="notif-title">${n.title}</div>
           <div class="notif-desc">${n.desc}${n.id ? ' · <span style="color:var(--blue-500);font-weight:600">Tocar para pagar</span>' : ''}</div>
         </div>`).join('')
-    : '<div class="no-data" style="text-align:center;padding:30px">✅ Todo al día, no hay notificaciones</div>';
+    : '<div class="no-data" style="text-align:center;padding:30px">✅ Todo al día</div>';
 
-  document.getElementById('notif-panel').classList.add('open');
-  document.getElementById('notif-overlay').classList.add('open');
+  const p = document.getElementById('notif-panel');
+  const o = document.getElementById('notif-overlay');
+  p.style.right = '0'; p.style.visibility = 'visible';
+  o.style.display = 'block';
+}
+
+function closeNotifPanel() {
+  const p = document.getElementById('notif-panel');
+  const o = document.getElementById('notif-overlay');
+  p.style.right = '-320px';
+  setTimeout(() => { p.style.visibility = 'hidden'; }, 300);
+  o.style.display = 'none';
 }
 
 function closeNotifPanel() {
@@ -5144,12 +5159,19 @@ function resetTheme() {
 }
 
 function openThemePanel() {
-  document.getElementById('theme-panel').classList.add('open');
-  document.getElementById('theme-overlay').classList.add('open');
+  const p = document.getElementById('theme-panel');
+  const o = document.getElementById('theme-overlay');
+  p.style.right = '0'; p.style.visibility = 'visible';
+  o.style.display = 'block';
+  p.classList.add('open'); o.classList.add('open');
 }
 function closeThemePanel() {
-  document.getElementById('theme-panel').classList.remove('open');
-  document.getElementById('theme-overlay').classList.remove('open');
+  const p = document.getElementById('theme-panel');
+  const o = document.getElementById('theme-overlay');
+  p.style.right = '-320px'; 
+  setTimeout(() => { p.style.visibility = 'hidden'; }, 300);
+  o.style.display = 'none';
+  p.classList.remove('open'); o.classList.remove('open');
 }
 
 function loadSavedTheme() {
@@ -5211,7 +5233,7 @@ setTimeout(() => {
 
 <!-- ══ NOTIFICATION PANEL ═══════════════════ -->
 <div class="theme-overlay" id="notif-overlay" onclick="closeNotifPanel()"></div>
-<div class="theme-panel" id="notif-panel">
+<div class="theme-panel" id="notif-panel" style="visibility:hidden;position:fixed;right:-320px;top:0;bottom:0;width:min(300px,90vw);background:white;z-index:250;overflow-y:auto;padding:24px 20px 40px;box-shadow:-4px 0 32px rgba(0,0,0,0.15)">
   <button class="theme-close" onclick="closeNotifPanel()">✕</button>
   <div style="font-size:18px;font-weight:700;color:var(--gray-800);margin-bottom:20px">🔔 Notificaciones</div>
   <div id="notif-list"></div>
@@ -5219,7 +5241,7 @@ setTimeout(() => {
 
 <!-- ══ THEME PANEL ═══════════════════════════════ -->
 <div class="theme-overlay" id="theme-overlay" onclick="closeThemePanel()"></div>
-<div class="theme-panel" id="theme-panel">
+<div class="theme-panel" id="theme-panel" style="visibility:hidden;position:fixed;right:-320px;top:0;bottom:0;width:min(300px,90vw);background:white;z-index:250;overflow-y:auto;padding:24px 20px 40px;box-shadow:-4px 0 32px rgba(0,0,0,0.15)">
   <button class="theme-close" onclick="closeThemePanel()">✕</button>
   <div style="font-size:18px;font-weight:700;color:var(--gray-800);margin-bottom:20px">🎨 Personalizar</div>
 
