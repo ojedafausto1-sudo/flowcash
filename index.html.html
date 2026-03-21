@@ -8,52 +8,56 @@ body { font-family: sans-serif; background: #0f172a; color: white; display: flex
 .box { background: #1e293b; padding: 32px; border-radius: 12px; width: 320px; }
 input { width: 100%; padding: 10px; margin: 8px 0 16px; background: #0f172a; border: 1px solid #334155; border-radius: 8px; color: white; font-size: 14px; box-sizing: border-box; }
 button { width: 100%; padding: 12px; background: #38bdf8; border: none; border-radius: 8px; color: #0f172a; font-weight: 700; font-size: 14px; cursor: pointer; }
-#msg { margin-top: 12px; font-size: 13px; min-height: 20px; color: #4ade80; }
+#msg { margin-top: 12px; font-size: 13px; min-height: 20px; }
 </style>
 </head>
 <body>
 <div class="box">
-  <h2 style="margin:0 0 24px;font-size:20px">🔥 Test Firebase Login</h2>
+  <h2 style="margin:0 0 8px;font-size:20px">🔥 Test Login</h2>
+  <div id="msg" style="color:#fbbf24;margin-bottom:16px">Cargando JS...</div>
   <label style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase">Email</label>
   <input type="email" id="email" value="ojedafausto1@gmail.com">
   <label style="font-size:11px;color:#64748b;font-weight:700;text-transform:uppercase">Contraseña</label>
   <input type="password" id="pass" placeholder="tu contraseña">
-  <button onclick="testLogin()">Probar login</button>
-  <div id="msg">Esperando...</div>
+  <button id="btn">Probar login</button>
 </div>
-
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script>
-document.getElementById('msg').textContent = 'JS cargado ✓';
+// Step 1: confirm JS runs at all
+document.getElementById('msg').textContent = '✓ JS funciona';
+document.getElementById('msg').style.color = '#4ade80';
 
-const config = {
-  apiKey: "AIzaSyCshqFpzN013FC8QIN7V5FkO_igz4qSe-s",
-  authDomain: "flowcash-3d95a.firebaseapp.com",
-  projectId: "flowcash-3d95a"
-};
-
-let auth;
-try {
-  firebase.initializeApp(config);
-  auth = firebase.auth();
-  document.getElementById('msg').textContent = 'Firebase OK ✓';
-} catch(e) {
-  document.getElementById('msg').textContent = 'Firebase ERROR: ' + e.message;
-}
-
-async function testLogin() {
+// Step 2: button click works
+document.getElementById('btn').addEventListener('click', async function() {
   const email = document.getElementById('email').value;
   const pass  = document.getElementById('pass').value;
-  document.getElementById('msg').textContent = 'Intentando...';
+  const msg   = document.getElementById('msg');
+  msg.style.color = '#fbbf24';
+  msg.textContent = 'Intentando login...';
+
+  // Use Firebase REST API directly - no SDK needed
+  const API_KEY = 'AIzaSyCshqFpzN013FC8QIN7V5FkO_igz4qSe-s';
   try {
-    const cred = await auth.signInWithEmailAndPassword(email, pass);
-    document.getElementById('msg').textContent = '✅ LOGIN OK! UID: ' + cred.user.uid;
+    const res = await fetch(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass, returnSecureToken: true })
+      }
+    );
+    const data = await res.json();
+    if (data.idToken) {
+      msg.style.color = '#4ade80';
+      msg.textContent = '✅ LOGIN OK! ' + data.email;
+    } else {
+      msg.style.color = '#f87171';
+      msg.textContent = '❌ ' + (data.error?.message || JSON.stringify(data.error));
+    }
   } catch(e) {
-    document.getElementById('msg').style.color = '#f87171';
-    document.getElementById('msg').textContent = '❌ Error: ' + e.code + ' — ' + e.message;
+    msg.style.color = '#f87171';
+    msg.textContent = '❌ Fetch error: ' + e.message;
   }
-}
+});
 </script>
 </body>
 </html>
