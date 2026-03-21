@@ -2536,10 +2536,11 @@ async function doLogin() {
   const btn = document.querySelector('#tab-login .btn-primary');
   btn.disabled = true; btn.textContent = 'Ingresando...';
   try {
-    await auth.signInWithEmailAndPassword(email, pass);
+    const cred = await auth.signInWithEmailAndPassword(email, pass);
+    await handleAuthUser(cred.user);
   } catch(e) {
     const badCodes = ['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-email'];
-    showToast(badCodes.includes(e.code) ? 'Email o contraseña incorrectos' : 'Error al ingresar: ' + (e.message||e.code));
+    showToast(badCodes.includes(e.code) ? 'Email o contraseña incorrectos' : 'Error: ' + (e.message||e.code));
     btn.disabled = false; btn.textContent = 'Entrar';
   }
 }
@@ -2554,17 +2555,20 @@ async function doRegister() {
   btn.disabled = true; btn.textContent = 'Registrando...';
   try {
     const cred = await auth.createUserWithEmailAndPassword(email, pass);
-    // Guardar en Firestore como pendiente
     await db.collection('users').doc(cred.user.uid).set({
       name, email,
       status: email === ADMIN_EMAIL ? 'approved' : 'pending',
       movimientos: [], budgets: {},
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    if (email !== ADMIN_EMAIL) showPendingScreen();
+    if (email === ADMIN_EMAIL) {
+      await handleAuthUser(cred.user);
+    } else {
+      showPendingScreen();
+    }
   } catch(e) {
     showToast(e.code === 'auth/email-already-in-use'
-      ? 'Ese email ya está registrado' : 'Error al registrarse: ' + e.message);
+      ? 'Ese email ya está registrado' : 'Error: ' + e.message);
     btn.disabled = false; btn.textContent = 'Crear cuenta';
   }
 }
