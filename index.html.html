@@ -1595,7 +1595,7 @@ body.mode-desktop .bottom-nav { display: none !important; }
       <div class="profile-menu" id="profile-menu">
         <div class="pm-user-info">
           <div class="pm-name" id="pm-name">Demo User</div>
-          <div class="pm-email" id="pm-email">ojedafausto1@gmail.com</div>
+          <div class="pm-email" id="pm-email"><a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="dcb3b6b9b8bdbabda9afa8b3ed9cbbb1bdb5b0f2bfb3b1">[email&#160;protected]</a></div>
         </div>
         <div class="pm-divider"></div>
         <button class="pm-item" onclick="showView('config')">⚙️ Configuración</button>
@@ -2313,7 +2313,7 @@ body.mode-desktop .bottom-nav { display: none !important; }
 
 <div class="msg-toast" id="toast"></div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 
 // ══════════════════════════════════════════════
 //  DEVICE DETECTION
@@ -5259,16 +5259,23 @@ loadSavedTheme();
 setupPWA();
 initKeyboardShortcuts();
 
-// Splash 1.5s → siempre muestra el picker de interfaz
+// Splash → picker. Simple y robusto.
+function hideSplashShowPicker() {
+  const splash = document.getElementById('splash-screen');
+  if (splash) splash.style.display = 'none';
+  showDevicePicker();
+}
+
+// Use 800ms — fast enough for mobile, still looks good
+setTimeout(hideSplashShowPicker, 800);
+
+// Safety: if after 3s still showing, force it
 setTimeout(() => {
   const splash = document.getElementById('splash-screen');
-  splash.style.opacity = '0';
-  splash.style.transition = 'opacity 0.4s';
-  setTimeout(() => {
-    splash.style.display = 'none';
-    showDevicePicker();
-  }, 400);
-}, 1500);
+  if (splash && splash.style.display !== 'none') {
+    hideSplashShowPicker();
+  }
+}, 3000);
 
 </script>
 
@@ -5334,13 +5341,3 @@ setTimeout(() => {
     <div class="radius-options">
       <div class="radius-opt r-none" onclick="setRadius('4px','4px',this)">Cuadrado</div>
       <div class="radius-opt r-md active" onclick="setRadius('14px','9px',this)">Redondeado</div>
-      <div class="radius-opt r-full" onclick="setRadius('22px','16px',this)">Muy redondo</div>
-    </div>
-  </div>
-
-  <button class="btn-reset-theme" onclick="resetTheme()">↺ Restaurar por defecto</button>
-</div>
-
-
-</body>
-</html>
