@@ -1401,8 +1401,8 @@ body.mode-tablet .modal { max-width: 520px !important; border-radius: 20px !impo
 
 
 <!-- ══ SPLASH SCREEN ════════════════════════════ -->
-<div id="splash-screen" style="position:fixed;top:0;left:0;right:0;bottom:0;width:100%;height:100%;background:linear-gradient(135deg,#0a1628,#1d4ed8);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity 0.5s ease">
-  <div style="font-size:72px;margin-bottom:16px;animation:splashBounce 1s ease infinite alternate">💰</div>
+<div id="splash-screen" style="position:fixed;top:0;left:0;right:0;bottom:0;background:linear-gradient(135deg,#0a1628,#1d4ed8);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999">
+  <div style="font-size:72px;margin-bottom:16px">💰</div>
   <div style="font-size:38px;font-weight:900;color:white;letter-spacing:-1px;margin-bottom:8px">FlowCash</div>
   <div style="font-size:15px;color:rgba(255,255,255,0.65);margin-bottom:48px">Finanzas personales inteligentes</div>
   <div style="width:44px;height:44px;border:4px solid rgba(255,255,255,0.2);border-top-color:white;border-radius:50%;animation:spin 0.8s linear infinite"></div>
@@ -2229,7 +2229,7 @@ body.mode-tablet .modal { max-width: 520px !important; border-radius: 20px !impo
 <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 
 // ══════════════════════════════════════════════
-//  SPLASH + DEVICE DETECTION
+//  DEVICE DETECTION
 // ══════════════════════════════════════════════
 let selectedDeviceMode = 'mobile';
 
@@ -2237,26 +2237,19 @@ function detectDevice() {
   const ua = navigator.userAgent.toLowerCase();
   const w  = window.innerWidth;
   const hasTouch = navigator.maxTouchPoints > 0;
-
-  if (/ipad/.test(ua) || (/macintosh/.test(ua) && hasTouch) || (hasTouch && w >= 768 && w <= 1200)) {
-    return 'tablet';
-  }
-  if (/android|iphone|ipod|mobile/.test(ua) || (hasTouch && w < 768)) {
-    return 'mobile';
-  }
+  if (/ipad/.test(ua) || (/macintosh/.test(ua) && hasTouch) || (hasTouch && w >= 768)) return 'tablet';
+  if (/android|iphone|ipod|mobile/.test(ua) || (hasTouch && w < 768)) return 'mobile';
   return 'desktop';
 }
 
 function getOSLabel() {
   const ua = navigator.userAgent;
-  if (/iPad/.test(ua)) return '📟 iPad detectado';
+  if (/iPad/.test(ua) || (/Mac/.test(ua) && navigator.maxTouchPoints > 0)) return '📟 iPad detectado';
   if (/iPhone/.test(ua)) return '📱 iPhone detectado';
   if (/Android/.test(ua) && /Mobile/.test(ua)) return '📱 Android detectado';
   if (/Android/.test(ua)) return '📟 Tablet Android detectada';
-  if (/Mac/.test(ua) && navigator.maxTouchPoints > 0) return '📟 iPad detectado';
   if (/Mac/.test(ua)) return '💻 Mac detectado';
   if (/Win/.test(ua)) return '💻 Windows detectado';
-  if (/Linux/.test(ua)) return '💻 Linux detectado';
   return '🔍 Dispositivo detectado';
 }
 
@@ -2265,119 +2258,69 @@ function applyDeviceMode(mode) {
   document.body.classList.add('mode-' + mode);
   selectedDeviceMode = mode;
   localStorage.setItem('flowcash_device_mode', mode);
-
-  // Update config selectors
   ['mobile','tablet','desktop'].forEach(m => {
     const el = document.getElementById('config-opt-' + m);
     if (el) el.classList.toggle('selected', m === mode);
   });
 }
 
-function selectDevice(mode, el) {
+function selectDevice(mode) {
   selectedDeviceMode = mode;
   ['mobile','tablet','desktop'].forEach(m => {
     const opt = document.getElementById('opt-' + m);
-    if (opt) {
-      opt.style.borderColor = m === mode ? '#2563eb' : '#e2e8f0';
-      opt.style.background  = m === mode ? '#eff6ff' : 'white';
-      opt.style.transform   = m === mode ? 'translateY(-2px)' : '';
-      opt.style.boxShadow   = m === mode ? '0 0 0 3px rgba(37,99,235,0.15)' : '';
-    }
+    if (!opt) return;
+    opt.style.borderColor = m === mode ? '#2563eb' : '#e2e8f0';
+    opt.style.background  = m === mode ? '#eff6ff' : 'white';
+    opt.style.transform   = m === mode ? 'translateY(-2px)' : '';
+    opt.style.boxShadow   = m === mode ? '0 0 0 3px rgba(37,99,235,0.15)' : '';
   });
 }
 
-async function confirmDevice() {
+function confirmDevice() {
+  localStorage.setItem('flowcash_device_mode', selectedDeviceMode);
   applyDeviceMode(selectedDeviceMode);
   document.getElementById('device-picker').style.display = 'none';
-  document.body.style.overflow = '';
-  localStorage.setItem('flowcash_device_mode', selectedDeviceMode);
-  await handleAuthUser(pendingAuthUser);
+  // Now show auth or app depending on firebase state
+  if (window._firebaseUser) {
+    handleAuthUser(window._firebaseUser);
+  } else {
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
 }
 
 function changeDeviceMode(mode) {
   applyDeviceMode(mode);
-  showToast('Interfaz cambiada a ' + (mode==='mobile'?'📱 Móvil':mode==='tablet'?'📟 Tablet':'💻 Escritorio'));
+  showToast('Interfaz: ' + (mode==='mobile'?'📱 Móvil':mode==='tablet'?'📟 Tablet':'💻 Escritorio'));
 }
 
-async function initSplash() {
-  // Check saved preference
-  const saved = localStorage.getItem('flowcash_device_mode');
-
-  // Show splash for 1.8 seconds
-  setTimeout(() => {
-    const splash = document.getElementById('splash-screen');
-    splash.classList.add('fade-out');
-
-    setTimeout(async () => {
-      splash.style.display = 'none';
-      splashDone = true;
-
-      if (saved) {
-        // Returning user — apply saved mode and process auth
-        applyDeviceMode(saved);
-        document.body.style.overflow = '';
-        await handleAuthUser(pendingAuthUser);
-      } else {
-        // First time — show device picker
-        const detected = detectDevice();
-        selectedDeviceMode = detected;
-        const label = document.getElementById('device-detected-label');
-        if (label) label.textContent = getOSLabel() + ' — ' + (detected==='mobile'?'Móvil':detected==='tablet'?'Tablet':'Escritorio') + ' sugerido';
-        selectDevice(detected, null);
-        document.getElementById('device-picker').style.display = 'flex';
-        // overflow stays hidden while picker is open
-      }
-    }, 500);
-  }, 1800);
-}
-
-// ── Keyboard shortcuts (desktop only) ────────
 function initKeyboardShortcuts() {
   document.addEventListener('keydown', e => {
     if (!document.body.classList.contains('mode-desktop')) return;
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-
+    if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
     const key = e.key.toLowerCase();
     const ctrl = e.ctrlKey || e.metaKey;
-
-    if (ctrl && key === 'n') { e.preventDefault(); openModal(); }           // Ctrl+N → nuevo movimiento
-    if (ctrl && key === 'f') { e.preventDefault(); showView('buscar'); }    // Ctrl+F → buscar
-    if (ctrl && key === 'e') { e.preventDefault(); exportCSV(); }           // Ctrl+E → exportar CSV
-    if (ctrl && key === 'p') { e.preventDefault(); exportPDF(); }           // Ctrl+P → exportar PDF
-
-    // Number keys → cambiar vista
-    if (!ctrl && key === '1') showView('dashboard');
-    if (!ctrl && key === '2') showView('movimientos');
-    if (!ctrl && key === '3') showView('presupuesto');
-    if (!ctrl && key === '4') showView('cuotas');
-    if (!ctrl && key === '5') showView('anual');
-    if (!ctrl && key === '6') showView('wallets');
-
-    // Escape → cerrar modales
-    if (key === 'escape') {
+    if (ctrl && key === 'n') { e.preventDefault(); openModal(); }
+    if (ctrl && key === 'f') { e.preventDefault(); showView('buscar'); }
+    if (ctrl && key === 'e') { e.preventDefault(); exportCSV(); }
+    if (!ctrl && key === 'escape') {
       document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
-      document.querySelectorAll('.theme-panel.open').forEach(p => p.classList.remove('open'));
-      document.querySelectorAll('.theme-overlay.open').forEach(p => p.classList.remove('open'));
+      document.querySelectorAll('.theme-panel.open, .theme-overlay.open').forEach(p => p.classList.remove('open'));
+    }
+    if (!ctrl && !isNaN(key) && key >= '1' && key <= '6') {
+      const views = ['dashboard','movimientos','presupuesto','cuotas','anual','wallets'];
+      showView(views[parseInt(key)-1]);
     }
   });
 }
 
-// ── Keyboard shortcuts tooltip in desktop ────
 function showShortcutsTooltip() {
   if (!document.body.classList.contains('mode-desktop')) return;
-  const existing = document.getElementById('shortcuts-tooltip');
-  if (existing) { existing.remove(); return; }
+  const ex = document.getElementById('shortcuts-tooltip');
+  if (ex) { ex.remove(); return; }
   const div = document.createElement('div');
   div.id = 'shortcuts-tooltip';
   div.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#1e293b;color:white;border-radius:14px;padding:16px 20px;font-size:13px;z-index:500;box-shadow:0 8px 32px rgba(0,0,0,0.3);line-height:1.8';
-  div.innerHTML = `<div style="font-weight:700;margin-bottom:8px">⌨️ Atajos de teclado</div>
-    <div><kbd style="background:#334155;border-radius:4px;padding:2px 6px">Ctrl+N</kbd> Nuevo movimiento</div>
-    <div><kbd style="background:#334155;border-radius:4px;padding:2px 6px">Ctrl+F</kbd> Buscar</div>
-    <div><kbd style="background:#334155;border-radius:4px;padding:2px 6px">Ctrl+E</kbd> Exportar CSV</div>
-    <div><kbd style="background:#334155;border-radius:4px;padding:2px 6px">Ctrl+P</kbd> Exportar PDF</div>
-    <div><kbd style="background:#334155;border-radius:4px;padding:2px 6px">1-6</kbd> Cambiar sección</div>
-    <div><kbd style="background:#334155;border-radius:4px;padding:2px 6px">Esc</kbd> Cerrar modales</div>
-    <div style="margin-top:8px;font-size:11px;color:#94a3b8;cursor:pointer" onclick="document.getElementById('shortcuts-tooltip').remove()">✕ Cerrar</div>`;
+  div.innerHTML = '<div style="font-weight:700;margin-bottom:8px">⌨️ Atajos</div><div>Ctrl+N: Nuevo · Ctrl+F: Buscar · 1-6: Secciones · Esc: Cerrar</div><div style="margin-top:8px;font-size:11px;color:#94a3b8;cursor:pointer" onclick="this.parentElement.remove()">✕ Cerrar</div>';
   document.body.appendChild(div);
 }
 
@@ -2517,34 +2460,36 @@ function switchTab(t) {
 }
 
 // Escucha cambios de sesión automáticamente
-let splashDone = false;
-let pendingAuthUser = null; // store user while splash is showing
-
 auth.onAuthStateChanged(async (user) => {
-  if (!splashDone) {
-    // Splash still showing — store and handle later
-    pendingAuthUser = user;
-    return;
-  }
+  window._firebaseUser = user || null;
+  // If splash/picker still showing, wait — confirmDevice or initApp will handle it
+  const splash = document.getElementById('splash-screen');
+  const picker = document.getElementById('device-picker');
+  if (splash && splash.style.display !== 'none') return;
+  if (picker && picker.style.display === 'flex') return;
   await handleAuthUser(user);
 });
 
 async function handleAuthUser(user) {
   if (user) {
     currentUser = user;
-    const snap = await db.collection('users').doc(user.uid).get();
-    const data = snap.exists ? snap.data() : {};
-
-    if (user.email === ADMIN_EMAIL) {
-      await loadFromFirestore();
-      launchApp();
-    } else if (data.status === 'approved') {
-      await loadFromFirestore();
-      launchApp();
-    } else if (data.status === 'pending') {
-      showPendingScreen();
-    } else {
-      auth.signOut();
+    try {
+      const snap = await db.collection('users').doc(user.uid).get();
+      const data = snap.exists ? snap.data() : {};
+      if (user.email === ADMIN_EMAIL) {
+        await loadFromFirestore();
+        launchApp();
+      } else if (data.status === 'approved') {
+        await loadFromFirestore();
+        launchApp();
+      } else if (data.status === 'pending') {
+        showPendingScreen();
+      } else {
+        auth.signOut();
+      }
+    } catch(e) {
+      console.error('Auth error:', e);
+      document.getElementById('auth-screen').style.display = 'flex';
     }
   } else {
     currentUser = null;
@@ -5205,11 +5150,33 @@ function showToast(msg) {
 // ══════════════════════════════════════════════
 //  INIT
 // ══════════════════════════════════════════════
-document.body.style.overflow = 'hidden';
 loadSavedTheme();
 setupPWA();
 initKeyboardShortcuts();
-initSplash();
+
+// Show splash for 1.5s, then device picker or auth
+setTimeout(() => {
+  const splash = document.getElementById('splash-screen');
+  splash.style.opacity = '0';
+  splash.style.transition = 'opacity 0.4s';
+  setTimeout(() => {
+    splash.style.display = 'none';
+    const saved = localStorage.getItem('flowcash_device_mode');
+    if (saved) {
+      applyDeviceMode(saved);
+      // Firebase auth state already handled by onAuthStateChanged
+      // If user is already known, handle now
+      handleAuthUser(window._firebaseUser);
+    } else {
+      // First time — show device picker
+      const detected = detectDevice();
+      selectDevice(detected);
+      const label = document.getElementById('device-detected-label');
+      if (label) label.textContent = getOSLabel() + ' — ' + (detected==='mobile'?'Móvil':detected==='tablet'?'Tablet':'Escritorio') + ' sugerido';
+      document.getElementById('device-picker').style.display = 'flex';
+    }
+  }, 400);
+}, 1500);
 
 </script>
 
