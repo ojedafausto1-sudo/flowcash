@@ -2310,18 +2310,35 @@ function switchTab(t) {
 }
 
 async function doLogin() {
-  const email = document.getElementById('login-email').value.trim();
-  const pass  = document.getElementById('login-pass').value;
-  if (!email||!pass) { showToast('Completá todos los campos'); return; }
+  console.log('doLogin called');
+  const emailEl = document.getElementById('login-email');
+  const passEl  = document.getElementById('login-pass');
+  if (!emailEl || !passEl) { alert('Error: campos no encontrados'); return; }
+  const email = emailEl.value.trim();
+  const pass  = passEl.value;
+  console.log('email:', email, 'pass length:', pass.length);
+  if (!email || !pass) { showToast('Completá todos los campos'); return; }
   const btn = document.querySelector('#tab-login .btn-auth');
-  btn.disabled = true; btn.textContent = 'Ingresando...';
+  if (btn) { btn.disabled = true; btn.textContent = 'Ingresando...'; }
+  
+  // Check Firebase loaded
+  if (typeof auth === 'undefined' || !auth) {
+    showToast('Error: Firebase no cargó');
+    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
+    return;
+  }
+  
   try {
+    console.log('Calling signInWithEmailAndPassword...');
     const cred = await auth.signInWithEmailAndPassword(email, pass);
+    console.log('Login OK, uid:', cred.user.uid);
     await handleAuthUser(cred.user);
   } catch(e) {
-    const bad = ['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-email'];
-    showToast(bad.includes(e.code) ? 'Email o contraseña incorrectos' : 'Error: ' + (e.message||e.code));
-    btn.disabled = false; btn.textContent = 'Ingresar';
+    console.error('Login error:', e.code, e.message);
+    const bad = ['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-email','auth/invalid-login-credentials'];
+    const msg = bad.includes(e.code) ? 'Email o contraseña incorrectos' : ('Error: ' + (e.code || e.message));
+    showToast(msg);
+    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
   }
 }
 
@@ -3783,10 +3800,31 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Global error catcher
+window.onerror = function(msg, src, line, col, err) {
+  console.error('JS Error:', msg, 'line:', line, err);
+  showToast && showToast('Error JS: ' + msg);
+};
+window.onunhandledrejection = function(e) {
+  console.error('Promise error:', e.reason);
+};
+
 // Unregister old service workers
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r=>r.unregister()));
 }
+
+// Verify everything loaded
+window.addEventListener('load', function() {
+  console.log('Window load complete');
+  console.log('Firebase:', typeof firebase !== 'undefined' ? 'OK' : 'MISSING');
+  console.log('auth:', typeof auth !== 'undefined' ? 'OK' : 'MISSING');  
+  console.log('doLogin:', typeof doLogin);
+  // If firebase didn't load, show error
+  if (typeof firebase === 'undefined') {
+    document.getElementById('auth-screen').innerHTML += '<div style="color:red;padding:20px;text-align:center">Error: Firebase no cargó. Verificá tu conexión.</div>';
+  }
+});
 
 </script>
 </body>
