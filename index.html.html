@@ -11,9 +11,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
@@ -2214,7 +2214,19 @@ async function handleAuthUser(user) {
     currentUser = user;
     try {
       const snap = await db.collection('users').doc(user.uid).get();
-      const data = snap.exists ? snap.data() : {};
+      if (!snap.exists) {
+        // Usuario nuevo sin doc — crear como aprobado si es admin, pendiente si no
+        const status = user.email === ADMIN_EMAIL ? 'approved' : 'pending';
+        await db.collection('users').doc(user.uid).set({
+          email: user.email, name: user.email.split('@')[0],
+          status, movimientos: [], budgets: {},
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        if (status === 'approved') { await loadFromFirestore(); launchApp(); }
+        else showPendingScreen();
+        return;
+      }
+      const data = snap.data();
       if (user.email === ADMIN_EMAIL || data.status === 'approved') {
         await loadFromFirestore();
         launchApp();
@@ -2222,9 +2234,12 @@ async function handleAuthUser(user) {
         showPendingScreen();
       } else {
         auth.signOut();
+        showAuthScreen();
       }
     } catch(e) {
-      console.error(e);
+      console.error('handleAuthUser error:', e);
+      // If Firestore fails, still let admin in
+      if (user.email === ADMIN_EMAIL) { launchApp(); return; }
       showAuthScreen();
     }
   } else {
