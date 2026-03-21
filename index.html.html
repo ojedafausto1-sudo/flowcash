@@ -4115,39 +4115,14 @@ function editTx(id) {
 //  OFFLINE / PWA
 // ══════════════════════════════════════════════
 function setupPWA() {
-  // Inject manifest dynamically
-  const manifest = {
-    name: 'FlowCash',
-    short_name: 'FlowCash',
-    start_url: '.',
-    display: 'standalone',
-    background_color: '#0a1628',
-    theme_color: '#1a3560',
-    icons: [{
-      src: 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💰</text></svg>',
-      sizes: '192x192', type: 'image/svg+xml'
-    }]
-  };
-  const blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
-  document.getElementById('pwa-manifest').href = URL.createObjectURL(blob);
-
-  // Service worker for offline
+  // Unregister any old service workers that might be caching old versions
   if ('serviceWorker' in navigator) {
-    const swCode = `
-const CACHE = 'flowcash-v1';
-const ASSETS = [self.location.href];
-self.addEventListener('install', e => e.waitUntil(
-  caches.open(CACHE).then(c => c.addAll(ASSETS))
-));
-self.addEventListener('fetch', e => {
-  if (e.request.url.includes('firestore') || e.request.url.includes('firebase') || e.request.url.includes('dolarapi')) return;
-  e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match(e.request))));
-});`;
-    const swBlob = new Blob([swCode], {type:'application/javascript'});
-    navigator.serviceWorker.register(URL.createObjectURL(swBlob))
-      .catch(() => {}); // Silently fail if SW not supported
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister());
+    });
   }
 }
+
 
 
 // ══════════════════════════════════════════════
@@ -5255,27 +5230,25 @@ function showToast(msg) {
 // ══════════════════════════════════════════════
 //  INIT — siempre muestra el picker al entrar
 // ══════════════════════════════════════════════
+// Unregister old service workers first
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(reg => reg.unregister());
+  });
+}
+
 loadSavedTheme();
-setupPWA();
 initKeyboardShortcuts();
 
-// Splash → picker. Simple y robusto.
+// Show picker after splash
 function hideSplashShowPicker() {
   const splash = document.getElementById('splash-screen');
   if (splash) splash.style.display = 'none';
   showDevicePicker();
 }
 
-// Use 800ms — fast enough for mobile, still looks good
 setTimeout(hideSplashShowPicker, 800);
-
-// Safety: if after 3s still showing, force it
-setTimeout(() => {
-  const splash = document.getElementById('splash-screen');
-  if (splash && splash.style.display !== 'none') {
-    hideSplashShowPicker();
-  }
-}, 3000);
+setTimeout(hideSplashShowPicker, 3000); // safety
 
 </script>
 
