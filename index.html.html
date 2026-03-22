@@ -1469,7 +1469,8 @@ body {
           <label class="form-label">Contraseña</label>
           <input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
-        <button class="btn-auth" onclick="doLogin()">Ingresar</button>
+        <button class="btn-auth" id="login-btn" onclick="doLogin()">Ingresar</button>
+      <div id="login-error" style="margin-top:10px;font-size:12px;color:#f87171;text-align:center"></div>
       </div>
       <div id="tab-register" style="display:none">
         <div class="form-group">
@@ -2322,16 +2323,23 @@ function switchTab(t) {
 }
 
 async function doLogin() {
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.textContent = '';
   const email = document.getElementById('login-email').value.trim();
   const pass  = document.getElementById('login-pass').value;
-  if (!email || !pass) { showToast('Completá todos los campos'); return; }
-  const btn = document.querySelector('#tab-login .btn-auth');
+  if (!email || !pass) {
+    if (errEl) errEl.textContent = 'Completá todos los campos';
+    showToast('Completá todos los campos'); return;
+  }
+  const btn = document.getElementById('login-btn') || document.querySelector('#tab-login .btn-auth');
   btn.disabled = true; btn.textContent = 'Ingresando...';
   try {
     const user = await fbSignIn(email, pass);
     await handleAuthUser(user);
   } catch(e) {
-    showToast(e.code === 'auth/invalid-credential' ? 'Email o contraseña incorrectos' : 'Error: ' + (e.message||'desconocido'));
+    const msg = e.code === 'auth/invalid-credential' ? 'Email o contraseña incorrectos' : 'Error: ' + (e.message||e.code||'desconocido');
+    if (errEl) errEl.textContent = msg;
+    showToast(msg);
     btn.disabled = false; btn.textContent = 'Ingresar';
   }
 }
@@ -3125,8 +3133,19 @@ if ('serviceWorker' in navigator) {
   if (user) {
     await handleAuthUser(user);
   }
-  // auth-screen is visible by default via CSS, nothing to do if no session
 })();
+
+// Self-test: confirm JS loaded
+window.addEventListener('DOMContentLoaded', () => {
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.textContent = '';
+});
+
+window.onerror = function(msg, src, line, col, err) {
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.textContent = 'JS Error (línea '+line+'): ' + msg;
+  console.error('JS Error:', msg, line, err);
+};
 
 </script>
 </body>
