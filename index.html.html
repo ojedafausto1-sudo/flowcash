@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="FlowCash">
 <meta name="theme-color" content="#0f172a">
 <title>FlowCash</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -14,6 +13,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
+
 /* ═══════════════════════════════════════════════
    FLOWCASH — Design System
 ═══════════════════════════════════════════════ */
@@ -1444,11 +1444,10 @@ body {
 @media (max-width: 1023px) {
   .views-container { padding-bottom: 80px; }
 }
+
 </style>
 </head>
 <body>
-
-<!-- ══ AUTH ══════════════════════════════════ -->
 <div id="auth-screen">
   <div class="auth-box">
     <div class="auth-logo">
@@ -2135,259 +2134,145 @@ body {
   </div>
 </div>
 
+
 <script>
 
 // ══════════════════════════════════════════════
-//  FIREBASE CONFIG
+//  FIREBASE REST API — sin SDK
 // ══════════════════════════════════════════════
-// ── Firebase REST API (no SDK) ──────────────────
-const FB_API_KEY   = 'AIzaSyCshqFpzN013FC8QIN7V5FkO_igz4qSe-s';
-const FB_PROJECT   = 'flowcash-3d95a';
-const FS_BASE      = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
-const AUTH_BASE    = `https://identitytoolkit.googleapis.com/v1/accounts`;
+const FB_KEY  = 'AIzaSyCshqFpzN013FC8QIN7V5FkO_igz4qSe-s';
+const FB_PROJ = 'flowcash-3d95a';
+const FS_URL  = `https://firestore.googleapis.com/v1/projects/${FB_PROJ}/databases/(default)/documents`;
+let   FB_TOKEN = null;
+let   FB_USER  = null;
 
-let _idToken = null;
-let _tokenExpiry = 0;
-
-// ── Auth helpers ─────────────────────────────
-const auth = {
-  _user: null,
-  _listeners: [],
-  onAuthStateChanged(fn) { this._listeners.push(fn); fn(this._user); },
-  _notify(user) { this._user = user; this._listeners.forEach(fn => fn(user)); },
-  async signInWithEmailAndPassword(email, password) {
-    const res = await fetch(`${AUTH_BASE}:signInWithPassword?key=${FB_API_KEY}`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    });
-    const data = await res.json();
-    if (!res.ok) { const e = new Error(data.error?.message||'Login failed'); e.code = _authCode(data.error?.message); throw e; }
-    _idToken = data.idToken; _tokenExpiry = Date.now() + 3500000;
-    const user = { uid: data.localId, email: data.email, displayName: data.displayName||'' };
-    this._notify(user);
-    return { user };
-  },
-  async createUserWithEmailAndPassword(email, password) {
-    const res = await fetch(`${AUTH_BASE}:signUp?key=${FB_API_KEY}`, {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ email, password, returnSecureToken: true })
-    });
-    const data = await res.json();
-    if (!res.ok) { const e = new Error(data.error?.message||'Register failed'); e.code = _authCode(data.error?.message); throw e; }
-    _idToken = data.idToken; _tokenExpiry = Date.now() + 3500000;
-    const user = { uid: data.localId, email: data.email };
-    this._notify(user);
-    return { user };
-  },
-  signOut() { _idToken = null; this._notify(null); localStorage.removeItem('fc_token'); localStorage.removeItem('fc_user'); }
-};
-
-function _authCode(msg) {
-  if (!msg) return 'auth/unknown';
-  if (msg.includes('EMAIL_NOT_FOUND') || msg.includes('INVALID_LOGIN_CREDENTIALS') || msg.includes('INVALID_PASSWORD')) return 'auth/invalid-credential';
-  if (msg.includes('EMAIL_EXISTS')) return 'auth/email-already-in-use';
-  if (msg.includes('WEAK_PASSWORD')) return 'auth/weak-password';
-  return 'auth/unknown';
+// ── Auth ─────────────────────────────────────
+async function fbSignIn(email, password) {
+  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FB_KEY}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email, password, returnSecureToken: true})
+  });
+  const d = await r.json();
+  if (!r.ok) {
+    const msg = d.error?.message || '';
+    const e = new Error(msg);
+    e.code = (msg.includes('INVALID') || msg.includes('NOT_FOUND')) ? 'auth/invalid-credential' : 'auth/error';
+    throw e;
+  }
+  FB_TOKEN = d.idToken;
+  FB_USER  = {uid: d.localId, email: d.email};
+  localStorage.setItem('fc_s', JSON.stringify({t: FB_TOKEN, u: FB_USER, e: Date.now()+3500000}));
+  return FB_USER;
 }
 
-async function _getToken() {
-  if (_idToken && Date.now() < _tokenExpiry) return _idToken;
-  // Try refresh from localStorage
-  const saved = localStorage.getItem('fc_token');
-  if (saved) { const d = JSON.parse(saved); if (d.expiry > Date.now()) { _idToken = d.token; _tokenExpiry = d.expiry; return _idToken; } }
+async function fbRegister(email, password) {
+  const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${FB_KEY}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({email, password, returnSecureToken: true})
+  });
+  const d = await r.json();
+  if (!r.ok) {
+    const msg = d.error?.message || '';
+    const e = new Error(msg);
+    e.code = msg.includes('EMAIL_EXISTS') ? 'auth/email-already-in-use' : 'auth/error';
+    throw e;
+  }
+  FB_TOKEN = d.idToken;
+  FB_USER  = {uid: d.localId, email: d.email};
+  localStorage.setItem('fc_s', JSON.stringify({t: FB_TOKEN, u: FB_USER, e: Date.now()+3500000}));
+  return FB_USER;
+}
+
+function fbSignOut() {
+  FB_TOKEN = null; FB_USER = null;
+  localStorage.removeItem('fc_s');
+}
+
+function fbRestoreSession() {
+  try {
+    const s = JSON.parse(localStorage.getItem('fc_s') || 'null');
+    if (s && s.e > Date.now()) { FB_TOKEN = s.t; FB_USER = s.u; return s.u; }
+  } catch(e) {}
   return null;
 }
 
-// ── Firestore helpers ────────────────────────
-const db = {
-  collection(col) {
-    return {
-      doc(id) {
-        const path = `${FS_BASE}/${col}/${id}`;
-        return {
-          async get() {
-            const token = await _getToken(); if (!token) return { exists: false, data: ()=>({}) };
-            const res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
-            if (res.status === 404) return { exists: false, data: ()=>({}) };
-            if (!res.ok) throw new Error('Firestore get failed: ' + res.status);
-            const raw = await res.json();
-            return { exists: true, id, data: () => _fromFirestore(raw.fields||{}) };
-          },
-          async set(obj, opts) {
-            const token = await _getToken(); if (!token) throw new Error('Not authenticated');
-            const fields = _toFirestore(obj);
-            const method = opts?.merge ? 'PATCH' : 'POST';
-            const url = opts?.merge ? path + '?updateMask.fieldPaths=' + Object.keys(fields).join('&updateMask.fieldPaths=') : path + '?documentId=' + id;
-            const base = opts?.merge ? path : `${FS_BASE}/${col}`;
-            const res = await fetch(opts?.merge ? path : base, {
-              method: opts?.merge ? 'PATCH' : 'POST',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fields })
-            });
-            if (!res.ok) {
-              // If PATCH fails, try creating
-              if (opts?.merge) {
-                const res2 = await fetch(`${FS_BASE}/${col}?documentId=${id}`, {
-                  method: 'POST',
-                  headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ fields })
-                });
-                if (!res2.ok) throw new Error('Firestore set failed: ' + await res2.text());
-              } else throw new Error('Firestore set failed: ' + await res.text());
-            }
-          },
-          async update(obj) {
-            const token = await _getToken(); if (!token) throw new Error('Not authenticated');
-            const flat = _flattenUpdate(obj);
-            const fields = _toFirestore(flat);
-            const mask = Object.keys(fields).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
-            const res = await fetch(`${path}?${mask}`, {
-              method: 'PATCH',
-              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fields })
-            });
-            if (!res.ok) throw new Error('Firestore update failed');
-          },
-          async delete() {
-            const token = await _getToken(); if (!token) throw new Error('Not authenticated');
-            await fetch(path, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-          }
-        };
-      },
-      async get() {
-        const token = await _getToken(); if (!token) return { docs: [] };
-        const res = await fetch(`${FS_BASE}/${col}`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!res.ok) return { docs: [] };
-        const raw = await res.json();
-        const docs = (raw.documents||[]).map(d => ({
-          id: d.name.split('/').pop(),
-          exists: true,
-          data: () => _fromFirestore(d.fields||{})
-        }));
-        return { docs, empty: docs.length === 0 };
-      },
-      where(field, op, val) {
-        return {
-          async get() {
-            const token = await _getToken(); if (!token) return { docs: [], empty: true };
-            // Simple client-side filter
-            const res = await fetch(`${FS_BASE}/${col}`, { headers: { Authorization: `Bearer ${token}` } });
-            if (!res.ok) return { docs: [], empty: true };
-            const raw = await res.json();
-            const docs = (raw.documents||[])
-              .map(d => ({ id: d.name.split('/').pop(), exists: true, data: () => _fromFirestore(d.fields||{}) }))
-              .filter(d => { const v = d.data()[field]; return op==='==' ? v===val : true; });
-            return { docs, empty: docs.length===0 };
-          }
-        };
-      },
-      orderBy() { return this; }
-    };
-  }
-};
+// ── Firestore ────────────────────────────────
+async function fsGet(col, id) {
+  if (!FB_TOKEN) return null;
+  const r = await fetch(`${FS_URL}/${col}/${id}`, {headers:{Authorization:`Bearer ${FB_TOKEN}`}});
+  if (r.status === 404) return null;
+  if (!r.ok) return null;
+  const d = await r.json();
+  return fsFrom(d.fields || {});
+}
 
-// Firestore field value sentinel
-const firebase = {
-  firestore: {
-    FieldValue: {
-      serverTimestamp: () => ({ __type: 'timestamp', value: new Date().toISOString() }),
-      delete: () => ({ __type: 'delete' })
-    }
+async function fsSet(col, id, obj) {
+  if (!FB_TOKEN) throw new Error('not auth');
+  const fields = fsTo(obj);
+  // Try PATCH (update), fall back to POST (create)
+  let r = await fetch(`${FS_URL}/${col}/${id}`, {
+    method: 'PATCH',
+    headers: {Authorization:`Bearer ${FB_TOKEN}`, 'Content-Type':'application/json'},
+    body: JSON.stringify({fields})
+  });
+  if (!r.ok && r.status !== 200) {
+    r = await fetch(`${FS_URL}/${col}?documentId=${id}`, {
+      method: 'POST',
+      headers: {Authorization:`Bearer ${FB_TOKEN}`, 'Content-Type':'application/json'},
+      body: JSON.stringify({fields})
+    });
   }
-};
+  return r.ok;
+}
 
-function _toFirestore(obj) {
-  const fields = {};
+async function fsList(col) {
+  if (!FB_TOKEN) return [];
+  const r = await fetch(`${FS_URL}/${col}`, {headers:{Authorization:`Bearer ${FB_TOKEN}`}});
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (d.documents||[]).map(doc => ({
+    id: doc.name.split('/').pop(),
+    ...fsFrom(doc.fields || {})
+  }));
+}
+
+function fsTo(obj) {
+  const f = {};
   for (const [k, v] of Object.entries(obj)) {
     if (v === null || v === undefined) continue;
-    if (v && v.__type === 'timestamp') { fields[k] = { timestampValue: v.value }; continue; }
-    if (v && v.__type === 'delete') continue;
-    if (typeof v === 'string')  fields[k] = { stringValue: v };
-    else if (typeof v === 'number')  fields[k] = { doubleValue: v };
-    else if (typeof v === 'boolean') fields[k] = { booleanValue: v };
-    else if (Array.isArray(v))       fields[k] = { arrayValue: { values: v.map(_toFsVal) } };
-    else if (typeof v === 'object')  fields[k] = { mapValue: { fields: _toFirestore(v) } };
+    f[k] = fsVal(v);
   }
-  return fields;
+  return f;
 }
-
-function _toFsVal(v) {
-  if (typeof v === 'string')  return { stringValue: v };
-  if (typeof v === 'number')  return { doubleValue: v };
-  if (typeof v === 'boolean') return { booleanValue: v };
-  if (Array.isArray(v))       return { arrayValue: { values: v.map(_toFsVal) } };
-  if (v && typeof v === 'object') return { mapValue: { fields: _toFirestore(v) } };
-  return { nullValue: null };
+function fsVal(v) {
+  if (typeof v === 'string')  return {stringValue: v};
+  if (typeof v === 'number')  return {doubleValue: v};
+  if (typeof v === 'boolean') return {booleanValue: v};
+  if (Array.isArray(v))       return {arrayValue: {values: v.map(fsVal)}};
+  if (v && typeof v === 'object') return {mapValue: {fields: fsTo(v)}};
+  return {nullValue: null};
 }
-
-function _fromFirestore(fields) {
-  const obj = {};
-  for (const [k, v] of Object.entries(fields)) {
-    obj[k] = _fromFsVal(v);
-  }
-  return obj;
+function fsFrom(fields) {
+  const o = {};
+  for (const [k, v] of Object.entries(fields)) o[k] = fsFromVal(v);
+  return o;
 }
-
-function _fromFsVal(v) {
-  if ('stringValue'  in v) return v.stringValue;
-  if ('integerValue' in v) return parseInt(v.integerValue);
-  if ('doubleValue'  in v) return parseFloat(v.doubleValue);
-  if ('booleanValue' in v) return v.booleanValue;
-  if ('nullValue'    in v) return null;
+function fsFromVal(v) {
+  if ('stringValue'   in v) return v.stringValue;
+  if ('integerValue'  in v) return parseInt(v.integerValue);
+  if ('doubleValue'   in v) return parseFloat(v.doubleValue);
+  if ('booleanValue'  in v) return v.booleanValue;
+  if ('arrayValue'    in v) return (v.arrayValue.values||[]).map(fsFromVal);
+  if ('mapValue'      in v) return fsFrom(v.mapValue.fields||{});
   if ('timestampValue' in v) return v.timestampValue;
-  if ('arrayValue'   in v) return (v.arrayValue.values||[]).map(_fromFsVal);
-  if ('mapValue'     in v) return _fromFirestore(v.mapValue.fields||{});
   return null;
 }
-
-function _flattenUpdate(obj, prefix='') {
-  const result = {};
-  for (const [k, v] of Object.entries(obj)) {
-    const key = prefix ? `${prefix}.${k}` : k;
-    if (v && typeof v === 'object' && !Array.isArray(v) && !(v.__type)) {
-      Object.assign(result, _flattenUpdate(v, key));
-    } else { result[key] = v; }
-  }
-  return result;
-}
-
-// Persist token in localStorage on login
-const _origSign = auth.signInWithEmailAndPassword.bind(auth);
-auth.signInWithEmailAndPassword = async function(email, pass) {
-  const r = await _origSign(email, pass);
-  localStorage.setItem('fc_token', JSON.stringify({ token: _idToken, expiry: _tokenExpiry }));
-  localStorage.setItem('fc_user', JSON.stringify(r.user));
-  return r;
-};
-const _origCreate = auth.createUserWithEmailAndPassword.bind(auth);
-auth.createUserWithEmailAndPassword = async function(email, pass) {
-  const r = await _origCreate(email, pass);
-  localStorage.setItem('fc_token', JSON.stringify({ token: _idToken, expiry: _tokenExpiry }));
-  localStorage.setItem('fc_user', JSON.stringify(r.user));
-  return r;
-};
-
-// Auto-restore session on load
-(async () => {
-  const savedUser = localStorage.getItem('fc_user');
-  const savedToken = localStorage.getItem('fc_token');
-  if (savedUser && savedToken) {
-    const t = JSON.parse(savedToken);
-    if (t.expiry > Date.now()) {
-      _idToken = t.token; _tokenExpiry = t.expiry;
-      auth._user = JSON.parse(savedUser);
-      // Will be picked up by onAuthStateChanged below
-    } else {
-      localStorage.removeItem('fc_token'); localStorage.removeItem('fc_user');
-    }
-  }
-})();
-
-const ADMIN_EMAIL = 'ojedafausto1@gmail.com';
 
 // ══════════════════════════════════════════════
 //  STATE
 // ══════════════════════════════════════════════
+const ADMIN_EMAIL = 'ojedafausto1@gmail.com';
+
 const CATEGORIAS = ["Comida","Ropa","Medico","Mascotas","Vivienda","Suscripciones",
   "Transporte","Estetica","Regalos","Personal","Estudios","Gastos hormiga","Deporte",
   "Viajes","Tecnología","Automotor","Telefono","Juegos","Salidas","Cocina","Ahorro","Ingreso"];
@@ -2414,63 +2299,132 @@ const MESES   = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
                  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 let currentUser = null;
-let userData    = { movimientos:[], budgets:{}, customCats:null, customWallets:null,
-                    walletInitials:{}, metas:[], tarjetas:[], sharedWith:{} };
-let currentPeriod = { year: new Date().getFullYear(), month: new Date().getMonth() };
-let activeFilter  = 'Todos';
-let chartCat = null, chartEvo = null, chartAnual = null;
-let currentTxId  = null;
+let userData = {movimientos:[],budgets:{},customCats:null,customWallets:null,walletInitials:{},metas:[],tarjetas:[],sharedWith:{}};
+let currentPeriod = {year: new Date().getFullYear(), month: new Date().getMonth()};
+let activeFilter = 'Todos';
+let chartCat=null, chartEvo=null, chartAnual=null;
+let currentTxId = null;
 let selectedTxIds = new Set();
-let currentYear  = new Date().getFullYear();
+let currentYear = new Date().getFullYear();
+const DOLAR_RATES = {blue:0,oficial:0,mep:0,ccl:0,EUR:0,BRL:0,GBP:0,UYU:0,CLP:0};
 
-const DOLAR_RATES = { blue:0, oficial:0, mep:0, ccl:0, EUR:0, BRL:0, GBP:0, UYU:0, CLP:0 };
-
-function getUserData()   { return userData; }
-function getUserCats()   { return userData.customCats    || [...CATEGORIAS]; }
-function getUserWallets(){ return userData.customWallets || [...WALLETS]; }
+function getUserCats()    { return userData.customCats    || [...CATEGORIAS]; }
+function getUserWallets() { return userData.customWallets || [...WALLETS]; }
 
 // ══════════════════════════════════════════════
-//  FIREBASE AUTH
+//  AUTH ACTIONS
 // ══════════════════════════════════════════════
-auth.onAuthStateChanged(async (user) => {
-  await handleAuthUser(user);
-});
+function switchTab(t) {
+  document.querySelectorAll('.auth-tab').forEach((el,i) =>
+    el.classList.toggle('active', (i===0&&t==='login')||(i===1&&t==='register')));
+  document.getElementById('tab-login').style.display    = t==='login'    ? '' : 'none';
+  document.getElementById('tab-register').style.display = t==='register' ? '' : 'none';
+}
 
-async function handleAuthUser(user) {
-  if (user) {
-    currentUser = user;
-    try {
-      const snap = await db.collection('users').doc(user.uid).get();
-      if (!snap.exists) {
-        // Usuario nuevo sin doc — crear como aprobado si es admin, pendiente si no
-        const status = user.email === ADMIN_EMAIL ? 'approved' : 'pending';
-        await db.collection('users').doc(user.uid).set({
-          email: user.email, name: user.email.split('@')[0],
-          status, movimientos: [], budgets: {},
-          createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        });
-        if (status === 'approved') { await loadFromFirestore(); launchApp(); }
-        else showPendingScreen();
-        return;
-      }
-      const data = snap.data();
-      if (user.email === ADMIN_EMAIL || data.status === 'approved') {
-        await loadFromFirestore();
-        launchApp();
-      } else if (data.status === 'pending') {
-        showPendingScreen();
-      } else {
-        auth.signOut();
-        showAuthScreen();
-      }
-    } catch(e) {
-      console.error('handleAuthUser error:', e);
-      // If Firestore fails, still let admin in
-      if (user.email === ADMIN_EMAIL) { launchApp(); return; }
-      showAuthScreen();
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const pass  = document.getElementById('login-pass').value;
+  if (!email || !pass) { showToast('Completá todos los campos'); return; }
+  const btn = document.querySelector('#tab-login .btn-auth');
+  btn.disabled = true; btn.textContent = 'Ingresando...';
+  try {
+    const user = await fbSignIn(email, pass);
+    await handleAuthUser(user);
+  } catch(e) {
+    showToast(e.code === 'auth/invalid-credential' ? 'Email o contraseña incorrectos' : 'Error: ' + (e.message||'desconocido'));
+    btn.disabled = false; btn.textContent = 'Ingresar';
+  }
+}
+
+async function doRegister() {
+  const name  = document.getElementById('reg-name').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const pass  = document.getElementById('reg-pass').value;
+  if (!name||!email||!pass) { showToast('Completá todos los campos'); return; }
+  if (pass.length < 6) { showToast('Contraseña mínimo 6 caracteres'); return; }
+  const btn = document.querySelector('#tab-register .btn-auth');
+  btn.disabled = true; btn.textContent = 'Registrando...';
+  try {
+    const user = await fbRegister(email, pass);
+    const status = email === ADMIN_EMAIL ? 'approved' : 'pending';
+    await fsSet('users', user.uid, {name, email, status, movimientos:[], budgets:{}});
+    if (status === 'approved') await handleAuthUser(user);
+    else showPendingScreen();
+  } catch(e) {
+    showToast(e.code === 'auth/email-already-in-use' ? 'Email ya registrado' : 'Error: ' + e.message);
+    btn.disabled = false; btn.textContent = 'Crear cuenta';
+  }
+}
+
+function doLogout() {
+  fbSignOut();
+  userData = {movimientos:[],budgets:{},customCats:null,customWallets:null,walletInitials:{},metas:[],tarjetas:[],sharedWith:{}};
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  toggleProfileMenu(true);
+}
+
+// ══════════════════════════════════════════════
+//  FIRESTORE LOAD/SAVE
+// ══════════════════════════════════════════════
+async function loadFromFirestore() {
+  if (!currentUser) return;
+  try {
+    const d = await fsGet('users', currentUser.uid);
+    if (d) {
+      userData.movimientos    = d.movimientos    || [];
+      userData.budgets        = d.budgets        || {};
+      userData.customCats     = d.customCats     || null;
+      userData.customWallets  = d.customWallets  || null;
+      userData.walletInitials = d.walletInitials || {};
+      userData.metas          = d.metas          || [];
+      userData.tarjetas       = d.tarjetas       || [];
+      userData.sharedWith     = d.sharedWith     || {};
     }
-  } else {
-    currentUser = null;
+  } catch(e) { console.error('loadFromFirestore:', e); }
+}
+
+async function saveToFirestore() {
+  if (!currentUser) return;
+  try {
+    await fsSet('users', currentUser.uid, {
+      movimientos:    userData.movimientos   || [],
+      budgets:        userData.budgets       || {},
+      customCats:     userData.customCats,
+      customWallets:  userData.customWallets,
+      walletInitials: userData.walletInitials|| {},
+      metas:          userData.metas         || [],
+      tarjetas:       userData.tarjetas      || [],
+      sharedWith:     userData.sharedWith    || {},
+      email:          currentUser.email
+    });
+  } catch(e) { console.error('saveToFirestore:', e); }
+}
+
+// ══════════════════════════════════════════════
+//  HANDLE AUTH USER
+// ══════════════════════════════════════════════
+async function handleAuthUser(user) {
+  if (!user) { showAuthScreen(); return; }
+  currentUser = user;
+  try {
+    let data = await fsGet('users', user.uid);
+    if (!data) {
+      const status = user.email === ADMIN_EMAIL ? 'approved' : 'pending';
+      await fsSet('users', user.uid, {email:user.email, name:user.email.split('@')[0], status, movimientos:[], budgets:{}});
+      data = {status};
+    }
+    if (user.email === ADMIN_EMAIL || data.status === 'approved') {
+      await loadFromFirestore();
+      launchApp();
+    } else if (data.status === 'pending') {
+      showPendingScreen();
+    } else {
+      fbSignOut(); showAuthScreen();
+    }
+  } catch(e) {
+    console.error('handleAuthUser:', e);
+    if (user.email === ADMIN_EMAIL) { launchApp(); return; }
     showAuthScreen();
   }
 }
@@ -2487,116 +2441,8 @@ function showPendingScreen() {
   document.getElementById('pending-screen').classList.add('show');
 }
 
-// ══════════════════════════════════════════════
-//  FIRESTORE
-// ══════════════════════════════════════════════
-async function loadFromFirestore() {
-  if (!currentUser) return;
-  try {
-    const doc = await db.collection('users').doc(currentUser.uid).get();
-    if (doc.exists) {
-      const d = doc.data();
-      userData.movimientos   = d.movimientos   || [];
-      userData.budgets       = d.budgets       || {};
-      userData.customCats    = d.customCats    || null;
-      userData.customWallets = d.customWallets || null;
-      userData.walletInitials= d.walletInitials|| {};
-      userData.metas         = d.metas         || [];
-      userData.tarjetas      = d.tarjetas      || [];
-      userData.sharedWith    = d.sharedWith    || {};
-    }
-  } catch(e) { console.error(e); }
-}
-
-async function saveToFirestore() {
-  if (!currentUser) return;
-  try {
-    await db.collection('users').doc(currentUser.uid).set({
-      movimientos:    userData.movimientos,
-      budgets:        userData.budgets,
-      customCats:     userData.customCats,
-      customWallets:  userData.customWallets,
-      walletInitials: userData.walletInitials || {},
-      metas:          userData.metas          || [],
-      tarjetas:       userData.tarjetas       || [],
-      sharedWith:     userData.sharedWith     || {},
-      email:          currentUser.email,
-      updatedAt:      firebase.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-  } catch(e) { console.error(e); }
-}
-
-// ══════════════════════════════════════════════
-//  AUTH ACTIONS
-// ══════════════════════════════════════════════
-function switchTab(t) {
-  document.querySelectorAll('.auth-tab').forEach((el,i) =>
-    el.classList.toggle('active', (i===0&&t==='login')||(i===1&&t==='register')));
-  document.getElementById('tab-login').style.display    = t==='login'    ? '' : 'none';
-  document.getElementById('tab-register').style.display = t==='register' ? '' : 'none';
-}
-
-async function doLogin() {
-  console.log('doLogin called');
-  const emailEl = document.getElementById('login-email');
-  const passEl  = document.getElementById('login-pass');
-  if (!emailEl || !passEl) { alert('Error: campos no encontrados'); return; }
-  const email = emailEl.value.trim();
-  const pass  = passEl.value;
-  console.log('email:', email, 'pass length:', pass.length);
-  if (!email || !pass) { showToast('Completá todos los campos'); return; }
-  const btn = document.querySelector('#tab-login .btn-auth');
-  if (btn) { btn.disabled = true; btn.textContent = 'Ingresando...'; }
-  
-  // Check Firebase loaded
-  if (typeof auth === 'undefined' || !auth) {
-    showToast('Error: Firebase no cargó');
-    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
-    return;
-  }
-  
-  try {
-    console.log('Calling signInWithEmailAndPassword...');
-    const cred = await auth.signInWithEmailAndPassword(email, pass);
-    console.log('Login OK, uid:', cred.user.uid);
-    await handleAuthUser(cred.user);
-  } catch(e) {
-    console.error('Login error:', e.code, e.message);
-    const bad = ['auth/wrong-password','auth/user-not-found','auth/invalid-credential','auth/invalid-email','auth/invalid-login-credentials'];
-    const msg = bad.includes(e.code) ? 'Email o contraseña incorrectos' : ('Error: ' + (e.code || e.message));
-    showToast(msg);
-    if (btn) { btn.disabled = false; btn.textContent = 'Ingresar'; }
-  }
-}
-
-async function doRegister() {
-  const name  = document.getElementById('reg-name').value.trim();
-  const email = document.getElementById('reg-email').value.trim();
-  const pass  = document.getElementById('reg-pass').value;
-  if (!name||!email||!pass) { showToast('Completá todos los campos'); return; }
-  if (pass.length < 6) { showToast('Contraseña mínimo 6 caracteres'); return; }
-  const btn = document.querySelector('#tab-register .btn-auth');
-  btn.disabled = true; btn.textContent = 'Registrando...';
-  try {
-    const cred = await auth.createUserWithEmailAndPassword(email, pass);
-    const status = email === ADMIN_EMAIL ? 'approved' : 'pending';
-    await db.collection('users').doc(cred.user.uid).set({
-      name, email, status, movimientos:[], budgets:{},
-      createdAt: firebase.firestore.FieldValue.serverTimestamp()
-    });
-    if (status === 'approved') await handleAuthUser(cred.user);
-    else showPendingScreen();
-  } catch(e) {
-    showToast(e.code==='auth/email-already-in-use' ? 'Email ya registrado' : 'Error: '+e.message);
-    btn.disabled = false; btn.textContent = 'Crear cuenta';
-  }
-}
-
-function doLogout() {
-  auth.signOut();
-  userData = { movimientos:[], budgets:{}, customCats:null, customWallets:null,
-               walletInitials:{}, metas:[], tarjetas:[], sharedWith:{} };
-  toggleProfileMenu(true);
+function hidePendingScreen() {
+  document.getElementById('pending-screen').classList.remove('show');
 }
 
 // ══════════════════════════════════════════════
@@ -2607,30 +2453,32 @@ function launchApp() {
   document.getElementById('pending-screen').classList.remove('show');
   document.getElementById('app').style.display = 'block';
 
-  const name  = userData.name  || currentUser?.displayName || currentUser?.email?.split('@')[0] || '?';
-  const email = currentUser?.email || '';
-  const initial = (name[0]||'?').toUpperCase();
+  const name    = currentUser?.email?.split('@')[0] || '?';
+  const email   = currentUser?.email || '';
+  const initial = name[0].toUpperCase();
 
-  document.getElementById('topbar-avatar').textContent = initial;
-  document.getElementById('sidebar-avatar').textContent = initial;
-  document.getElementById('sidebar-name').textContent = name;
-  document.getElementById('sidebar-email').textContent = email;
-  document.getElementById('pm-name').textContent  = name;
-  document.getElementById('pm-email').textContent = email;
+  ['topbar-avatar','sidebar-avatar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = initial;
+  });
+  const sn = document.getElementById('sidebar-name');   if(sn) sn.textContent = name;
+  const se = document.getElementById('sidebar-email');  if(se) se.textContent = email;
+  const pn = document.getElementById('pm-name');        if(pn) pn.textContent = name;
+  const pe = document.getElementById('pm-email');       if(pe) pe.textContent = email;
 
   if (currentUser?.email === ADMIN_EMAIL) {
     document.getElementById('view-admin').style.display = '';
-    // Add admin to nav if not already there
     if (!document.querySelector('[data-view="admin"]')) {
       const sb = document.createElement('button');
-      sb.className = 'nav-item'; sb.dataset.view = 'admin';
-      sb.innerHTML = '<span class="nav-icon">♛</span>Admin';
-      sb.onclick = () => showView('admin');
-      document.getElementById('sidebar').insertBefore(sb, document.querySelector('.sidebar-footer'));
+      sb.className='nav-item'; sb.dataset.view='admin';
+      sb.innerHTML='<span class="nav-icon">♛</span>Admin';
+      sb.onclick=()=>showView('admin');
+      const footer = document.querySelector('.sidebar-footer');
+      if (footer) footer.parentNode.insertBefore(sb, footer);
       const bn = document.createElement('button');
-      bn.className = 'bnav-item'; bn.dataset.view = 'admin';
-      bn.innerHTML = '<span class="bnav-icon">♛</span><span class="bnav-label">Admin</span>';
-      bn.onclick = () => showView('admin');
+      bn.className='bnav-item'; bn.dataset.view='admin';
+      bn.innerHTML='<span class="bnav-icon">♛</span><span class="bnav-label">Admin</span>';
+      bn.onclick=()=>showView('admin');
       document.getElementById('bottom-nav').appendChild(bn);
     }
   }
@@ -2640,6 +2488,7 @@ function launchApp() {
   fetchDolar();
   loadSavedTheme();
   renderThemePanel();
+  updateNotifBadge();
 }
 
 // ══════════════════════════════════════════════
@@ -2649,7 +2498,7 @@ function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('view-'+name);
   if (el) el.classList.add('active');
-  document.querySelectorAll('.nav-item, .bnav-item').forEach(b =>
+  document.querySelectorAll('.nav-item,.bnav-item').forEach(b =>
     b.classList.toggle('active', b.dataset.view === name));
   closeAllDropdowns();
   if (name==='dashboard')   renderDashboard();
@@ -2669,25 +2518,25 @@ function closeAllDropdowns() {
 
 function changePeriod(dir) {
   currentPeriod.month += dir;
-  if (currentPeriod.month > 11) { currentPeriod.month = 0;  currentPeriod.year++; }
-  if (currentPeriod.month < 0)  { currentPeriod.month = 11; currentPeriod.year--; }
+  if (currentPeriod.month > 11) { currentPeriod.month=0; currentPeriod.year++; }
+  if (currentPeriod.month < 0)  { currentPeriod.month=11; currentPeriod.year--; }
   renderAll();
 }
 
 function changeYear(dir) {
   currentYear += dir;
-  document.getElementById('year-label').textContent = currentYear;
+  const el = document.getElementById('year-label');
+  if (el) el.textContent = currentYear;
   renderAnual();
 }
 
 function renderAll() {
   const label = MESES[currentPeriod.month] + ' ' + currentPeriod.year;
-  document.getElementById('period-label').textContent  = label;
-  document.getElementById('period-label2').textContent = label;
+  const l1 = document.getElementById('period-label');  if(l1) l1.textContent = label;
+  const l2 = document.getElementById('period-label2'); if(l2) l2.textContent = label;
   const active = document.querySelector('.view.active');
   if (!active) return;
-  const name = active.id.replace('view-','');
-  showView(name);
+  showView(active.id.replace('view-',''));
 }
 
 // ══════════════════════════════════════════════
@@ -2695,31 +2544,23 @@ function renderAll() {
 // ══════════════════════════════════════════════
 function fmtARS(n) {
   if (isNaN(n)) return '$0';
-  return '$' + Math.abs(n).toLocaleString('es-AR', {minimumFractionDigits:0, maximumFractionDigits:0});
+  return '$' + Math.abs(n).toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0});
 }
 
-function isFuturePeriod(y, m) {
+function isFuturePeriod(y,m) {
   const now = new Date();
   return (y > now.getFullYear()) || (y === now.getFullYear() && m > now.getMonth());
 }
 
 function getTxPeriod() {
   return (userData.movimientos||[]).filter(t => {
-    const [ty, tm] = t.fecha.split('-').map(Number);
+    const [ty,tm] = t.fecha.split('-').map(Number);
     return ty === currentPeriod.year && tm-1 === currentPeriod.month;
   });
 }
 
-function getProjectedTxs(y, m) {
-  return (userData.movimientos||[]).filter(t => {
-    const [ty, tm] = t.fecha.split('-').map(Number);
-    return ty === y && tm-1 === m;
-  });
-}
-
 function txIconBg(tx) {
-  const colors = { Gasto: 'rgba(248,113,113,0.15)', Ingreso: 'rgba(74,222,128,0.15)',
-                   Ahorro: 'rgba(251,191,36,0.15)', Transferencia: 'rgba(56,189,248,0.15)' };
+  const colors = {Gasto:'rgba(248,113,113,0.15)',Ingreso:'rgba(74,222,128,0.15)',Ahorro:'rgba(251,191,36,0.15)',Transferencia:'rgba(56,189,248,0.15)'};
   return colors[tx.tipo] || 'rgba(148,163,184,0.15)';
 }
 function txIcon(tx) {
@@ -2733,6 +2574,7 @@ function txAmtClass(tx) {
 
 function showToast(msg) {
   const t = document.getElementById('toast');
+  if (!t) return;
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
@@ -2741,187 +2583,130 @@ function showToast(msg) {
 function toggleProfileMenu(forceClose) {
   const m = document.getElementById('profile-menu');
   if (forceClose) { m.classList.remove('open'); return; }
-  // Position near avatar
   const av = document.getElementById('topbar-avatar');
   const rect = av.getBoundingClientRect();
-  m.style.top  = (rect.bottom + 6) + 'px';
+  m.style.top   = (rect.bottom + 6) + 'px';
   m.style.right = (window.innerWidth - rect.right) + 'px';
   m.classList.toggle('open');
 }
 
 document.addEventListener('click', e => {
   const menu = document.getElementById('profile-menu');
-  if (menu.classList.contains('open') &&
-      !menu.contains(e.target) &&
-      !document.getElementById('topbar-avatar').contains(e.target) &&
-      !document.getElementById('user-pill')?.contains(e.target)) {
+  if (!menu) return;
+  const av = document.getElementById('topbar-avatar');
+  if (menu.classList.contains('open') && !menu.contains(e.target) && !av.contains(e.target)) {
     menu.classList.remove('open');
   }
 });
 
 function populateSelects() {
-  const cats    = getUserCats();
-  const wallets = getUserWallets();
-  ['m-categoria'].forEach(id => {
-    const el = document.getElementById(id); if(!el) return;
-    el.innerHTML = cats.map(c => `<option value="${c}">${CAT_ICONS[c]||'💸'} ${c}</option>`).join('');
-  });
-  ['m-billetera','m-billetera-dest'].forEach(id => {
-    const el = document.getElementById(id); if(!el) return;
-    el.innerHTML = wallets.map(w => `<option value="${w}">${w}</option>`).join('');
-  });
-  // Search filters
-  const catSel = document.getElementById('sf-cat');
-  const walSel = document.getElementById('sf-wallet');
-  if (catSel && catSel.options.length <= 1)
-    cats.forEach(c => { const o=document.createElement('option'); o.value=c; o.textContent=c; catSel.appendChild(o); });
-  if (walSel && walSel.options.length <= 1)
-    wallets.forEach(w => { const o=document.createElement('option'); o.value=w; o.textContent=w; walSel.appendChild(o); });
+  const cats = getUserCats(), wallets = getUserWallets();
+  const catOpts = cats.map(c=>`<option value="${c}">${CAT_ICONS[c]||'💸'} ${c}</option>`).join('');
+  const walOpts = wallets.map(w=>`<option value="${w}">${w}</option>`).join('');
+  const mc = document.getElementById('m-categoria'); if(mc) mc.innerHTML = catOpts;
+  const mb = document.getElementById('m-billetera'); if(mb) mb.innerHTML = walOpts;
+  const md = document.getElementById('m-billetera-dest'); if(md) md.innerHTML = walOpts;
+  // Search selects
+  const sc = document.getElementById('sf-cat');
+  if (sc && sc.options.length <= 1) cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sc.appendChild(o);});
+  const sw = document.getElementById('sf-wallet');
+  if (sw && sw.options.length <= 1) wallets.forEach(w=>{const o=document.createElement('option');o.value=w;o.textContent=w;sw.appendChild(o);});
 }
 
 // ══════════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════════
 function renderDashboard() {
-  const future = isFuturePeriod(currentPeriod.year, currentPeriod.month);
-  const txs = future ? getProjectedTxs(currentPeriod.year, currentPeriod.month) : getTxPeriod();
+  const txs = getTxPeriod();
   const ingresos = txs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0);
   const gastos   = txs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0);
   const balance  = ingresos - gastos;
+  const future   = isFuturePeriod(currentPeriod.year, currentPeriod.month);
 
-  document.getElementById('proj-banner').style.display = future ? 'flex' : 'none';
+  const pb = document.getElementById('proj-banner');
+  if (pb) pb.style.display = future ? 'flex' : 'none';
 
-  document.getElementById('stats-grid').innerHTML = `
-    <div class="stat-card income">
-      <div class="stat-label">Ingresos</div>
-      <div class="stat-value income">${fmtARS(ingresos)}</div>
-      <div class="stat-sub">${future?'proyectado':'este mes'}</div>
-    </div>
-    <div class="stat-card expense">
-      <div class="stat-label">Gastos</div>
-      <div class="stat-value expense">${fmtARS(gastos)}</div>
-      <div class="stat-sub">${future?'proyectado':'este mes'}</div>
-    </div>
-    <div class="stat-card balance">
-      <div class="stat-label">Balance</div>
-      <div class="stat-value ${balance>=0?'balance-pos':'balance-neg'}">${balance>=0?'+':''}${fmtARS(balance)}</div>
-      <div class="stat-sub">${future?'proyectado':'este mes'}</div>
-    </div>`;
+  const sg = document.getElementById('stats-grid');
+  if (sg) sg.innerHTML = `
+    <div class="stat-card income"><div class="stat-label">Ingresos</div><div class="stat-value income">${fmtARS(ingresos)}</div><div class="stat-sub">este mes</div></div>
+    <div class="stat-card expense"><div class="stat-label">Gastos</div><div class="stat-value expense">${fmtARS(gastos)}</div><div class="stat-sub">este mes</div></div>
+    <div class="stat-card balance"><div class="stat-label">Balance</div><div class="stat-value ${balance>=0?'balance-pos':'balance-neg'}">${balance>=0?'+':''}${fmtARS(balance)}</div><div class="stat-sub">este mes</div></div>`;
 
   renderCompare();
 
   // Pie chart
-  const gastosTxs = txs.filter(t=>t.tipo==='Gasto');
   const catMap = {};
-  gastosTxs.forEach(t => { catMap[t.categoria] = (catMap[t.categoria]||0) + t.importe; });
-  const labels = Object.keys(catMap);
-  const vals   = Object.values(catMap);
-  const colors = labels.map(l => CAT_COLORS[l] || '#94a3b8');
-
-  if (chartCat) chartCat.destroy();
-  const ctx1 = document.getElementById('chart-cat').getContext('2d');
-  chartCat = new Chart(ctx1, {
-    type: 'doughnut',
-    data: { labels, datasets: [{ data: vals, backgroundColor: colors, borderWidth: 0 }] },
-    options: {
-      responsive:true, maintainAspectRatio:false,
-      plugins: {
-        legend: { position:'right', labels: { font:{size:10}, color:'#94a3b8', boxWidth:10, padding:8 } }
-      },
-      cutout: '65%'
-    }
-  });
-
-  // Line chart (6 months)
-  const labels6=[]; const ing6=[], gas6=[];
-  for (let i=5; i>=0; i--) {
-    let m = currentPeriod.month - i, y = currentPeriod.year;
-    while (m<0) { m+=12; y--; }
-    labels6.push(MESES[m].slice(0,3));
-    const mTxs = (userData.movimientos||[]).filter(t => {
-      const [ty,tm]=t.fecha.split('-').map(Number);
-      return ty===y && tm-1===m;
+  txs.filter(t=>t.tipo==='Gasto').forEach(t=>{ catMap[t.categoria]=(catMap[t.categoria]||0)+t.importe; });
+  const labels=Object.keys(catMap), vals=Object.values(catMap);
+  const colors=labels.map(l=>CAT_COLORS[l]||'#94a3b8');
+  const ctx1 = document.getElementById('chart-cat');
+  if (ctx1) {
+    if (chartCat) chartCat.destroy();
+    chartCat = new Chart(ctx1.getContext('2d'), {
+      type:'doughnut',
+      data:{labels,datasets:[{data:vals,backgroundColor:colors,borderWidth:0}]},
+      options:{responsive:true,maintainAspectRatio:false,cutout:'65%',plugins:{legend:{position:'right',labels:{font:{size:10},color:'#94a3b8',boxWidth:10,padding:8}}}}
     });
+  }
+
+  // Line chart 6 months
+  const labels6=[],ing6=[],gas6=[];
+  for (let i=5;i>=0;i--) {
+    let m=currentPeriod.month-i, y=currentPeriod.year;
+    while(m<0){m+=12;y--;}
+    labels6.push(MESES[m].slice(0,3));
+    const mTxs=(userData.movimientos||[]).filter(t=>{const[ty,tm]=t.fecha.split('-').map(Number);return ty===y&&tm-1===m;});
     ing6.push(mTxs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0));
     gas6.push(mTxs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0));
   }
-  if (chartEvo) chartEvo.destroy();
-  const ctx2 = document.getElementById('chart-evo').getContext('2d');
-  chartEvo = new Chart(ctx2, {
-    type:'line',
-    data:{ labels:labels6, datasets:[
-      { label:'Ingresos', data:ing6, borderColor:'#4ade80', backgroundColor:'rgba(74,222,128,0.08)', tension:0.4, fill:true, pointRadius:3, pointBackgroundColor:'#4ade80' },
-      { label:'Gastos',   data:gas6, borderColor:'#f87171', backgroundColor:'rgba(248,113,113,0.08)', tension:0.4, fill:true, pointRadius:3, pointBackgroundColor:'#f87171' }
-    ]},
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ font:{size:10}, color:'#94a3b8', boxWidth:10 } } },
-      scales:{
-        y:{ ticks:{ callback:v=>'$'+Math.round(v/1000)+'k', font:{size:10}, color:'#64748b' }, grid:{color:'rgba(51,65,85,0.5)'} },
-        x:{ ticks:{ font:{size:10}, color:'#64748b' }, grid:{color:'rgba(51,65,85,0.5)'} }
-      }
-    }
-  });
+  const ctx2 = document.getElementById('chart-evo');
+  if (ctx2) {
+    if (chartEvo) chartEvo.destroy();
+    chartEvo = new Chart(ctx2.getContext('2d'), {
+      type:'line',
+      data:{labels:labels6,datasets:[
+        {label:'Ingresos',data:ing6,borderColor:'#4ade80',backgroundColor:'rgba(74,222,128,0.08)',tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#4ade80'},
+        {label:'Gastos',data:gas6,borderColor:'#f87171',backgroundColor:'rgba(248,113,113,0.08)',tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#f87171'}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},color:'#94a3b8',boxWidth:10}}},scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:10},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}},x:{ticks:{font:{size:10},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}}}}
+    });
+  }
 
-  // Last transactions
-  const recent = [...getTxPeriod()].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
-  document.getElementById('dash-tx-list').innerHTML = recent.length
-    ? recent.map(t => buildTxHTML(t)).join('')
+  // Recent txs
+  const recent = [...txs].sort((a,b)=>b.fecha.localeCompare(a.fecha)).slice(0,5);
+  const el = document.getElementById('dash-tx-list');
+  if (el) el.innerHTML = recent.length
+    ? recent.map(t=>buildTxHTML(t)).join('')
     : '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Sin movimientos este mes</div></div>';
 }
 
-// ══════════════════════════════════════════════
-//  COMPARE
-// ══════════════════════════════════════════════
 function renderCompare() {
-  const {year,month} = currentPeriod;
-  let pm=month-1, py=year;
-  if (pm<0) { pm=11; py--; }
-  const cur  = getTxPeriod();
-  const prev = (userData.movimientos||[]).filter(t => {
-    const [y,m]=t.fecha.split('-').map(Number); return y===py && m-1===pm;
-  });
-  const totals = txs => ({
-    ing: txs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0),
-    gas: txs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0)
-  });
-  const c=totals(cur), p=totals(prev);
-  c.bal=c.ing-c.gas; p.bal=p.ing-p.gas;
-  const delta=(a,b)=>{
-    if(b===0) return '';
-    const pct=Math.round((a-b)/Math.abs(b)*100);
-    return `<div class="compare-delta ${pct>=0?'up':'down'}">${pct>=0?'▲':'▼'} ${Math.abs(pct)}%</div>`;
-  };
-  document.getElementById('compare-content').innerHTML = `
+  const {year,month}=currentPeriod;
+  let pm=month-1,py=year; if(pm<0){pm=11;py--;}
+  const cur=getTxPeriod();
+  const prev=(userData.movimientos||[]).filter(t=>{const[y,m]=t.fecha.split('-').map(Number);return y===py&&m-1===pm;});
+  const t=txs=>({ing:txs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0),gas:txs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0)});
+  const c=t(cur),p=t(prev);c.bal=c.ing-c.gas;p.bal=p.ing-p.gas;
+  const delta=(a,b)=>{if(!b)return '';const pct=Math.round((a-b)/Math.abs(b)*100);return `<div class="compare-delta ${pct>=0?'up':'down'}">${pct>=0?'▲':'▼'}${Math.abs(pct)}%</div>`;};
+  const el=document.getElementById('compare-content');
+  if(el) el.innerHTML=`
     <div class="compare-cell"><div class="compare-label">Ingresos</div><div class="compare-val" style="color:var(--green)">${fmtARS(c.ing)}</div>${delta(c.ing,p.ing)}</div>
     <div class="compare-cell"><div class="compare-label">Gastos</div><div class="compare-val" style="color:var(--red)">${fmtARS(c.gas)}</div>${delta(c.gas,p.gas)}</div>
     <div class="compare-cell"><div class="compare-label">Balance</div><div class="compare-val">${fmtARS(c.bal)}</div>${delta(c.bal,p.bal)}</div>`;
 }
 
-// ══════════════════════════════════════════════
-//  TX HTML BUILDER
-// ══════════════════════════════════════════════
 function buildTxHTML(tx, selectable) {
-  const sign = tx.tipo==='Gasto' ? '-' : tx.tipo==='Ingreso' ? '+' : '';
-  const payBtn = tx.estado==='Pendiente'
-    ? `<button class="btn-secondary" style="padding:4px 10px;font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3);white-space:nowrap" onclick="event.stopPropagation();marcarPagado(${tx.id})">✓ Pagar</button>`
-    : '';
-  const cb = selectable ? `<input type="checkbox" ${selectedTxIds.has(tx.id)?'checked':''} onclick="event.stopPropagation();toggleTxSelect(${tx.id},this.closest('.tx-item'))" style="flex-shrink:0;width:16px;height:16px;cursor:pointer;accent-color:var(--accent)">` : '';
+  const sign=tx.tipo==='Gasto'?'-':tx.tipo==='Ingreso'?'+':'';
+  const payBtn=tx.estado==='Pendiente'?`<button class="btn-secondary" style="padding:4px 8px;font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3);white-space:nowrap" onclick="event.stopPropagation();marcarPagado(${tx.id})">✓</button>`:'';
+  const cb=selectable?`<input type="checkbox" ${selectedTxIds.has(tx.id)?'checked':''} onclick="event.stopPropagation();toggleTxSelect(${tx.id},this.closest('.tx-item'))" style="flex-shrink:0;width:16px;height:16px;cursor:pointer;accent-color:var(--accent)">`:'';
   return `<div class="tx-item ${selectedTxIds.has(tx.id)?'selected':''}" onclick="openTxActions(${tx.id})">
     ${cb}
     <div class="tx-icon" style="background:${txIconBg(tx)}">${txIcon(tx)}</div>
     <div class="tx-info">
       <div class="tx-name">${tx.concepto}</div>
-      <div class="tx-meta">
-        <span>${tx.categoria}</span> · <span>${tx.billetera||''}</span> · <span>${tx.fecha}</span>
-        <span class="badge ${tx.estado==='Pagado'?'badge-paid':'badge-pending'}">${tx.estado}</span>
-        ${tx.cuotas>1?`<span style="color:var(--accent);font-size:10px;font-weight:700">💳 ${tx.cuotaActual}/${tx.cuotas}</span>`:''}
-      </div>
+      <div class="tx-meta"><span>${tx.categoria}</span>·<span>${tx.billetera||''}</span>·<span>${tx.fecha}</span><span class="badge ${tx.estado==='Pagado'?'badge-paid':'badge-pending'}">${tx.estado}</span>${tx.cuotas>1?`<span style="color:var(--accent);font-size:10px;font-weight:700">💳${tx.cuotaActual}/${tx.cuotas}</span>`:''}</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-      ${payBtn}
-      <span class="tx-amount ${txAmtClass(tx)}">${sign}${fmtARS(tx.importe)}</span>
-    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${payBtn}<span class="tx-amount ${txAmtClass(tx)}">${sign}${fmtARS(tx.importe)}</span></div>
   </div>`;
 }
 
@@ -2929,22 +2714,18 @@ function buildTxHTML(tx, selectable) {
 //  MOVIMIENTOS
 // ══════════════════════════════════════════════
 function renderMovimientos() {
-  const tipos = ['Todos','Gasto','Ingreso','Ahorro','Transferencia'];
-  document.getElementById('filter-row').innerHTML = tipos.map(t =>
-    `<button class="filter-chip ${activeFilter===t?'active':''}" onclick="setFilter('${t}',this)">${t}</button>`
-  ).join('');
-  let txs = isFuturePeriod(currentPeriod.year, currentPeriod.month)
-    ? getProjectedTxs(currentPeriod.year, currentPeriod.month)
-    : getTxPeriod();
-  if (activeFilter !== 'Todos') txs = txs.filter(t=>t.tipo===activeFilter);
-  txs = [...txs].sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  document.getElementById('tx-list').innerHTML = txs.length
-    ? txs.map(t=>buildTxHTML(t)).join('')
-    : '<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Sin movimientos</div></div>';
+  const tipos=['Todos','Gasto','Ingreso','Ahorro','Transferencia'];
+  const fr=document.getElementById('filter-row');
+  if(fr) fr.innerHTML=tipos.map(t=>`<button class="filter-chip ${activeFilter===t?'active':''}" onclick="setFilter('${t}',this)">${t}</button>`).join('');
+  let txs=getTxPeriod();
+  if(activeFilter!=='Todos') txs=txs.filter(t=>t.tipo===activeFilter);
+  txs=[...txs].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const el=document.getElementById('tx-list');
+  if(el) el.innerHTML=txs.length?txs.map(t=>buildTxHTML(t)).join(''):'<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">Sin movimientos</div></div>';
 }
 
-function setFilter(f, el) {
-  activeFilter = f;
+function setFilter(f,el) {
+  activeFilter=f;
   document.querySelectorAll('#filter-row .filter-chip').forEach(c=>c.classList.remove('active'));
   el.classList.add('active');
   renderMovimientos();
@@ -2954,754 +2735,282 @@ function setFilter(f, el) {
 //  TX ACTIONS
 // ══════════════════════════════════════════════
 function openTxActions(id) {
-  currentTxId = id;
-  const tx = (userData.movimientos||[]).find(m=>m.id===id);
-  if (!tx) return;
-  document.getElementById('tx-actions-title').textContent = tx.concepto;
-  document.getElementById('tx-pagar-btn').style.display = tx.estado==='Pendiente' ? '' : 'none';
+  currentTxId=id;
+  const tx=(userData.movimientos||[]).find(m=>m.id===id);
+  if(!tx)return;
+  const el=document.getElementById('tx-actions-title');if(el)el.textContent=tx.concepto;
+  const pb=document.getElementById('tx-pagar-btn');if(pb)pb.style.display=tx.estado==='Pendiente'?'':'none';
   document.getElementById('tx-actions-overlay').classList.add('open');
 }
-
-function closeTxActionsOutside(e) {
-  if (e.target===document.getElementById('tx-actions-overlay'))
-    document.getElementById('tx-actions-overlay').classList.remove('open');
-}
-
-function marcarPagadoFromActions() {
+function closeTxActionsOutside(e){if(e.target===document.getElementById('tx-actions-overlay'))document.getElementById('tx-actions-overlay').classList.remove('open');}
+function marcarPagadoFromActions(){document.getElementById('tx-actions-overlay').classList.remove('open');marcarPagado(currentTxId);}
+function deleteTxFromActions(){document.getElementById('tx-actions-overlay').classList.remove('open');deleteTx(currentTxId);}
+function marcarPagado(id){const tx=(userData.movimientos||[]).find(m=>m.id===id);if(tx){tx.estado='Pagado';saveToFirestore();renderAll();updateNotifBadge();showToast('✓ Pagado');}}
+function deleteTx(id){if(!confirm('¿Eliminar?'))return;userData.movimientos=(userData.movimientos||[]).filter(m=>m.id!==id);saveToFirestore();renderAll();showToast('Eliminado');}
+function duplicateTx(id){document.getElementById('tx-actions-overlay').classList.remove('open');const tx=(userData.movimientos||[]).find(m=>m.id===id);if(!tx)return;const n={...tx,id:Date.now(),fecha:new Date().toISOString().split('T')[0],concepto:tx.concepto+' (copia)',estado:'Pendiente'};userData.movimientos.push(n);saveToFirestore();renderAll();showToast('Duplicado');}
+function editTx(id){
   document.getElementById('tx-actions-overlay').classList.remove('open');
-  marcarPagado(currentTxId);
-}
-
-function deleteTxFromActions() {
-  document.getElementById('tx-actions-overlay').classList.remove('open');
-  deleteTx(currentTxId);
-}
-
-function marcarPagado(id) {
-  const tx = (userData.movimientos||[]).find(m=>m.id===id);
-  if (tx) { tx.estado='Pagado'; saveToFirestore(); renderAll(); showToast('✓ Marcado como pagado'); }
-}
-
-function deleteTx(id) {
-  if (!confirm('¿Eliminar este movimiento?')) return;
-  userData.movimientos = (userData.movimientos||[]).filter(m=>m.id!==id);
-  saveToFirestore();
-  renderAll();
-  showToast('Movimiento eliminado');
-}
-
-function duplicateTx(id) {
-  document.getElementById('tx-actions-overlay').classList.remove('open');
-  const tx = (userData.movimientos||[]).find(m=>m.id===id);
-  if (!tx) return;
-  const newTx = {...tx, id:Date.now(), fecha:new Date().toISOString().split('T')[0],
-    concepto: tx.concepto.replace(/ \(\d+\/\d+\)$/,'')+' (copia)', estado:'Pendiente'};
-  userData.movimientos.push(newTx);
-  saveToFirestore();
-  renderAll();
-  showToast('Movimiento duplicado');
-}
-
-function editTx(id) {
-  document.getElementById('tx-actions-overlay').classList.remove('open');
-  const tx = (userData.movimientos||[]).find(m=>m.id===id);
-  if (!tx) return;
+  const tx=(userData.movimientos||[]).find(m=>m.id===id);if(!tx)return;
   openModal();
-  setTimeout(() => {
-    document.getElementById('modal-editing-id').value = id;
-    document.getElementById('modal-title').textContent = '✏️ Editar movimiento';
-    document.getElementById('save-mov-btn').textContent = '💾 Guardar cambios';
-    document.getElementById('m-fecha').value     = tx.fecha;
-    document.getElementById('m-importe').value   = tx.importe;
-    document.getElementById('m-concepto').value  = tx.concepto.replace(/ \(\d+\/\d+\)$/,'');
-    document.getElementById('m-categoria').value = tx.categoria;
-    document.getElementById('m-billetera').value = tx.billetera;
-    document.getElementById('m-comentarios').value = tx.comentarios||'';
-    setTipo(tx.tipo, document.querySelector(`[data-tipo="${tx.tipo}"]`));
-    setEstado(tx.estado, document.querySelector(`[data-estado="${tx.estado}"]`));
-    if (tx.cuotas>1) {
-      document.getElementById('toggle-cuotas').classList.add('on');
-      document.getElementById('cuotas-body').style.display='';
-      document.getElementById('m-cuotas').value = tx.cuotas;
-      document.getElementById('m-cuota-desde').value = tx.cuotaActual||1;
-      recalcChip();
-    }
-  }, 50);
+  setTimeout(()=>{
+    document.getElementById('modal-editing-id').value=id;
+    document.getElementById('modal-title').textContent='✏️ Editar';
+    document.getElementById('m-fecha').value=tx.fecha;
+    document.getElementById('m-importe').value=tx.importe;
+    document.getElementById('m-concepto').value=tx.concepto.replace(/ \(\d+\/\d+\)$/,'');
+    document.getElementById('m-categoria').value=tx.categoria;
+    document.getElementById('m-billetera').value=tx.billetera;
+    document.getElementById('m-comentarios').value=tx.comentarios||'';
+    setTipo(tx.tipo,document.querySelector(`[data-tipo="${tx.tipo}"]`));
+    setEstado(tx.estado,document.querySelector(`[data-estado="${tx.estado}"]`));
+  },50);
 }
 
 // ══════════════════════════════════════════════
 //  PRESUPUESTO
 // ══════════════════════════════════════════════
-function renderPresupuesto() {
-  const cats   = getUserCats();
-  const budgets= userData.budgets||{};
-  const txs    = getTxPeriod();
-  const html   = cats.filter(c=>budgets[c]).map(c => {
-    const gasto = txs.filter(t=>t.tipo==='Gasto'&&t.categoria===c).reduce((s,t)=>s+t.importe,0);
-    const budget= budgets[c]||0;
-    const pct   = budget>0?Math.min(100,Math.round(gasto/budget*100)):0;
-    const color = pct>=100?'var(--red)':pct>=80?'var(--yellow)':'var(--green)';
-    return `<div class="budget-item">
-      <div class="budget-row">
-        <span class="budget-name">${CAT_ICONS[c]||'💸'} ${c}
-          ${pct>=100?'<span class="badge badge-pending">Superado</span>':pct>=80?'<span class="badge" style="background:rgba(251,191,36,0.1);color:var(--yellow)">⚡ Cerca</span>':''}
-        </span>
-        <span class="budget-amounts">${fmtARS(gasto)} / ${fmtARS(budget)}</span>
-      </div>
-      <div class="budget-bar-bg"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-    </div>`;
+function renderPresupuesto(){
+  const cats=getUserCats(),budgets=userData.budgets||{},txs=getTxPeriod();
+  const html=cats.filter(c=>budgets[c]).map(c=>{
+    const gasto=txs.filter(t=>t.tipo==='Gasto'&&t.categoria===c).reduce((s,t)=>s+t.importe,0);
+    const budget=budgets[c]||0;
+    const pct=budget>0?Math.min(100,Math.round(gasto/budget*100)):0;
+    const color=pct>=100?'var(--red)':pct>=80?'var(--yellow)':'var(--green)';
+    return `<div class="budget-item"><div class="budget-row"><span class="budget-name">${CAT_ICONS[c]||'💸'} ${c}${pct>=100?' <span class="badge badge-pending">Superado</span>':pct>=80?' <span class="badge" style="background:rgba(251,191,36,0.1);color:var(--yellow)">⚡</span>':''}</span><span class="budget-amounts">${fmtARS(gasto)} / ${fmtARS(budget)}</span></div><div class="budget-bar-bg"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div></div>`;
   });
-  document.getElementById('presupuesto-list').innerHTML = html.length
-    ? `<div class="card">${html.join('')}</div>`
-    : '<div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">No hay presupuestos configurados. Presioná "Editar" para agregar.</div></div>';
+  const el=document.getElementById('presupuesto-list');
+  if(el) el.innerHTML=html.length?`<div class="card">${html.join('')}</div>`:'<div class="empty-state"><div class="empty-icon">🎯</div><div class="empty-text">Presioná "Editar" para configurar presupuestos</div></div>';
 }
-
-function openBudgetModal() {
-  const cats = getUserCats();
-  const budgets = userData.budgets||{};
-  document.getElementById('budget-edit-list').innerHTML = cats.map(c =>
-    `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2)">
-      <span style="flex:1;font-size:13px;font-weight:600;color:var(--text2)">${CAT_ICONS[c]||'💸'} ${c}</span>
-      <input type="number" class="mform-input" style="width:130px" placeholder="0"
-        data-cat="${c}" value="${budgets[c]||''}" inputmode="numeric">
-    </div>`).join('');
+function openBudgetModal(){
+  const cats=getUserCats(),budgets=userData.budgets||{};
+  const el=document.getElementById('budget-edit-list');
+  if(el) el.innerHTML=cats.map(c=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border2)"><span style="flex:1;font-size:13px;font-weight:600;color:var(--text2)">${CAT_ICONS[c]||'💸'} ${c}</span><input type="number" class="mform-input" style="width:130px" placeholder="0" data-cat="${c}" value="${budgets[c]||''}" inputmode="numeric"></div>`).join('');
   document.getElementById('budget-modal-overlay').classList.add('open');
 }
-
-function saveBudgets() {
-  const inputs = document.querySelectorAll('#budget-edit-list input');
-  inputs.forEach(inp => {
-    const v = parseFloat(inp.value)||0;
-    if (v>0) userData.budgets[inp.dataset.cat]=v;
-    else delete userData.budgets[inp.dataset.cat];
-  });
-  saveToFirestore();
-  document.getElementById('budget-modal-overlay').classList.remove('open');
-  renderPresupuesto();
-  showToast('Presupuesto guardado');
+function saveBudgets(){
+  document.querySelectorAll('#budget-edit-list input').forEach(inp=>{const v=parseFloat(inp.value)||0;if(v>0)userData.budgets[inp.dataset.cat]=v;else delete userData.budgets[inp.dataset.cat];});
+  saveToFirestore();document.getElementById('budget-modal-overlay').classList.remove('open');renderPresupuesto();showToast('Presupuesto guardado');
 }
 
 // ══════════════════════════════════════════════
 //  CUOTAS
 // ══════════════════════════════════════════════
-function renderCuotas() {
-  const cuotasTxs = (userData.movimientos||[]).filter(m=>m.cuotas&&m.cuotas>1);
-  const groups = {};
-  cuotasTxs.forEach(m => {
-    const base = m.concepto.replace(/\s*\(\d+\/\d+\).*$/,'').trim();
-    if (!groups[base]) groups[base]=[];
-    groups[base].push(m);
+function renderCuotas(){
+  const groups={};
+  (userData.movimientos||[]).filter(m=>m.cuotas&&m.cuotas>1).forEach(m=>{
+    const base=m.concepto.replace(/\s*\(\d+\/\d+\).*$/,'').trim();
+    if(!groups[base])groups[base]=[];groups[base].push(m);
   });
-  const keys = Object.keys(groups);
-  if (!keys.length) {
-    document.getElementById('cuotas-list').innerHTML = '<div class="empty-state"><div class="empty-icon">💳</div><div class="empty-text">No hay cuotas registradas</div></div>';
-    return;
-  }
-  document.getElementById('cuotas-list').innerHTML = keys.map(base => {
-    const txs  = groups[base].sort((a,b)=>(a.cuotaActual||0)-(b.cuotaActual||0));
-    const first= txs[0], last=txs[txs.length-1];
-    const totalOrig = first.cuotas||txs.length;
-    const primeraCarg = first.cuotaActual||1;
-    const cuotaVal  = first.importe;
-    const done      = txs.filter(t=>t.estado==='Pagado').length;
-    const pending   = txs.filter(t=>t.estado==='Pendiente').length;
-    const pagasPrev = primeraCarg-1;
-    const pagasTotal= pagasPrev+done;
-    const pct       = Math.round(pagasTotal/totalOrig*100);
-    const deuda     = cuotaVal*pending;
-    const color     = pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--yellow)';
-    return `<div class="cuota-card">
-      <div class="cuota-header">
-        <div>
-          <div class="cuota-name">${CAT_ICONS[first.categoria]||'💸'} ${base}</div>
-          <div class="cuota-meta">${first.categoria} · ${first.billetera}</div>
-          <div style="font-size:11px;color:var(--text3);margin-top:2px">Cuota ${primeraCarg}/${totalOrig} ${pagasPrev>0?`· <span style="color:var(--accent)">${pagasPrev} previas ya pagas</span>`:''}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="cuota-amount">${fmtARS(cuotaVal)}<span style="font-size:10px;color:var(--text3)">/cuota</span></div>
-          ${deuda>0?`<div class="cuota-debt">Deuda: ${fmtARS(deuda)}</div>`:''}
-        </div>
-      </div>
-      <div class="budget-bar-bg"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-      <div class="cuota-progress">
-        <span>${pagasTotal} de ${totalOrig} pagas</span>
-        <span>Resta: ${fmtARS(cuotaVal*(totalOrig-pagasTotal))}</span>
-      </div>
-    </div>`;
+  const keys=Object.keys(groups);
+  const el=document.getElementById('cuotas-list');if(!el)return;
+  if(!keys.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">💳</div><div class="empty-text">No hay cuotas</div></div>';return;}
+  el.innerHTML=keys.map(base=>{
+    const txs=groups[base].sort((a,b)=>(a.cuotaActual||0)-(b.cuotaActual||0));
+    const first=txs[0],tot=first.cuotas||txs.length,desde=first.cuotaActual||1;
+    const done=txs.filter(t=>t.estado==='Pagado').length,pend=txs.filter(t=>t.estado==='Pendiente').length;
+    const pagas=desde-1+done,pct=Math.round(pagas/tot*100);
+    const color=pct>=100?'var(--green)':pct>=50?'var(--accent)':'var(--yellow)';
+    return `<div class="cuota-card"><div class="cuota-header"><div><div class="cuota-name">${txIcon(first)} ${base}</div><div class="cuota-meta">${first.categoria}·${first.billetera}</div></div><div style="text-align:right"><div class="cuota-amount">${fmtARS(first.importe)}/cuota</div>${pend>0?`<div class="cuota-debt">Deuda:${fmtARS(first.importe*pend)}</div>`:''}</div></div><div class="budget-bar-bg"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div><div class="cuota-progress"><span>${pagas} de ${tot}</span><span>Resta:${fmtARS(first.importe*(tot-pagas))}</span></div></div>`;
   }).join('');
 }
 
 // ══════════════════════════════════════════════
 //  ANUAL
 // ══════════════════════════════════════════════
-function renderAnual() {
-  document.getElementById('year-label').textContent = currentYear;
-  const months = Array.from({length:12},(_,i)=>i);
-  const ingData=[], gasData=[], balData=[];
-  months.forEach(m => {
-    const txs = (userData.movimientos||[]).filter(t=>{
-      const [y,mo]=t.fecha.split('-').map(Number); return y===currentYear&&mo-1===m;
-    });
+function renderAnual(){
+  const el=document.getElementById('year-label');if(el)el.textContent=currentYear;
+  const months=Array.from({length:12},(_,i)=>i);
+  const ingData=[],gasData=[],balData=[];
+  months.forEach(m=>{
+    const txs=(userData.movimientos||[]).filter(t=>{const[y,mo]=t.fecha.split('-').map(Number);return y===currentYear&&mo-1===m;});
     const ing=txs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0);
     const gas=txs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0);
-    ingData.push(ing); gasData.push(gas); balData.push(ing-gas);
+    ingData.push(ing);gasData.push(gas);balData.push(ing-gas);
   });
-  if (chartAnual) chartAnual.destroy();
-  const ctx = document.getElementById('chart-anual').getContext('2d');
-  chartAnual = new Chart(ctx, {
-    type:'bar',
-    data:{
-      labels: MESES.map(m=>m.slice(0,3)),
-      datasets:[
-        { label:'Ingresos', data:ingData, backgroundColor:'rgba(74,222,128,0.6)', borderRadius:4 },
-        { label:'Gastos',   data:gasData, backgroundColor:'rgba(248,113,113,0.6)', borderRadius:4 },
-        { label:'Balance',  data:balData, type:'line', borderColor:'#38bdf8', backgroundColor:'transparent', tension:0.4, pointRadius:3, pointBackgroundColor:'#38bdf8', yAxisID:'y' }
-      ]
-    },
-    options:{
-      responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ font:{size:10}, color:'#94a3b8', boxWidth:10 } } },
-      scales:{
-        y:{ ticks:{ callback:v=>'$'+Math.round(v/1000)+'k', font:{size:9}, color:'#64748b' }, grid:{color:'rgba(51,65,85,0.5)'} },
-        x:{ ticks:{ font:{size:9}, color:'#64748b' }, grid:{color:'rgba(51,65,85,0.5)'} }
-      }
-    }
-  });
-  document.getElementById('months-grid').innerHTML = months.map(m => {
-    const bal=ingData[m]-gasData[m];
-    const isCur = currentYear===currentPeriod.year && m===currentPeriod.month;
-    return `<div class="month-card ${isCur?'active':''}" onclick="currentPeriod={year:${currentYear},month:${m}};showView('dashboard')">
-      <div class="month-name">${MESES[m].slice(0,3)}</div>
-      <div class="month-bal" style="color:${bal>=0?'var(--green)':'var(--red)'}">${bal>=0?'+':''}${fmtARS(bal)}</div>
-    </div>`;
-  }).join('');
+  const ctx=document.getElementById('chart-anual');
+  if(ctx){
+    if(chartAnual)chartAnual.destroy();
+    chartAnual=new Chart(ctx.getContext('2d'),{type:'bar',data:{labels:MESES.map(m=>m.slice(0,3)),datasets:[{label:'Ingresos',data:ingData,backgroundColor:'rgba(74,222,128,0.6)',borderRadius:4},{label:'Gastos',data:gasData,backgroundColor:'rgba(248,113,113,0.6)',borderRadius:4},{label:'Balance',data:balData,type:'line',borderColor:'#38bdf8',backgroundColor:'transparent',tension:0.4,pointRadius:3,pointBackgroundColor:'#38bdf8'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},color:'#94a3b8',boxWidth:10}}},scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:9},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}},x:{ticks:{font:{size:9},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}}}}});
+  }
+  const mg=document.getElementById('months-grid');
+  if(mg) mg.innerHTML=months.map(m=>{const bal=ingData[m]-gasData[m];const isCur=currentYear===currentPeriod.year&&m===currentPeriod.month;return `<div class="month-card ${isCur?'active':''}" onclick="currentPeriod={year:${currentYear},month:${m}};showView('dashboard')"><div class="month-name">${MESES[m].slice(0,3)}</div><div class="month-bal" style="color:${bal>=0?'var(--green)':'var(--red)'}">${bal>=0?'+':''}${fmtARS(bal)}</div></div>`;}).join('');
 }
 
 // ══════════════════════════════════════════════
 //  BUSCAR
 // ══════════════════════════════════════════════
-function initSearch() { doSearch(); }
-
-let _filteredTxs = [];
-function doSearch() {
-  const text   = (document.getElementById('search-text')?.value||'').toLowerCase().trim();
-  const tipo   = document.getElementById('sf-tipo')?.value||'';
-  const cat    = document.getElementById('sf-cat')?.value||'';
-  const wallet = document.getElementById('sf-wallet')?.value||'';
-  const estado = document.getElementById('sf-estado')?.value||'';
-  const desde  = document.getElementById('sf-desde')?.value||'';
-  const hasta  = document.getElementById('sf-hasta')?.value||'';
-  const cuotas = document.getElementById('sf-cuotas')?.value||'';
-  let txs = [...(userData.movimientos||[])].sort((a,b)=>b.fecha.localeCompare(a.fecha));
-  if (text)   txs=txs.filter(t=>t.concepto.toLowerCase().includes(text)||(t.comentarios||'').toLowerCase().includes(text));
-  if (tipo)   txs=txs.filter(t=>t.tipo===tipo);
-  if (cat)    txs=txs.filter(t=>t.categoria===cat);
-  if (wallet) txs=txs.filter(t=>t.billetera===wallet);
-  if (estado) txs=txs.filter(t=>t.estado===estado);
-  if (desde)  txs=txs.filter(t=>t.fecha>=desde);
-  if (hasta)  txs=txs.filter(t=>t.fecha<=hasta);
-  if (cuotas==='si') txs=txs.filter(t=>t.cuotas>1);
-  if (cuotas==='no') txs=txs.filter(t=>!t.cuotas||t.cuotas<=1);
-  _filteredTxs = txs;
-  document.getElementById('search-count').textContent = `${txs.length} resultado${txs.length!==1?'s':''}`;
-  document.getElementById('search-results').innerHTML = txs.length
-    ? txs.map(t=>buildTxHTML(t, true)).join('')
-    : '<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Sin resultados</div></div>';
+function initSearch(){doSearch();}
+let _filteredTxs=[];
+function doSearch(){
+  const text=(document.getElementById('search-text')?.value||'').toLowerCase().trim();
+  const tipo=document.getElementById('sf-tipo')?.value||'';
+  const cat=document.getElementById('sf-cat')?.value||'';
+  const wallet=document.getElementById('sf-wallet')?.value||'';
+  const estado=document.getElementById('sf-estado')?.value||'';
+  const desde=document.getElementById('sf-desde')?.value||'';
+  const hasta=document.getElementById('sf-hasta')?.value||'';
+  const cuotas=document.getElementById('sf-cuotas')?.value||'';
+  let txs=[...(userData.movimientos||[])].sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  if(text)txs=txs.filter(t=>t.concepto.toLowerCase().includes(text));
+  if(tipo)txs=txs.filter(t=>t.tipo===tipo);
+  if(cat)txs=txs.filter(t=>t.categoria===cat);
+  if(wallet)txs=txs.filter(t=>t.billetera===wallet);
+  if(estado)txs=txs.filter(t=>t.estado===estado);
+  if(desde)txs=txs.filter(t=>t.fecha>=desde);
+  if(hasta)txs=txs.filter(t=>t.fecha<=hasta);
+  if(cuotas==='si')txs=txs.filter(t=>t.cuotas>1);
+  if(cuotas==='no')txs=txs.filter(t=>!t.cuotas||t.cuotas<=1);
+  _filteredTxs=txs;
+  const sc=document.getElementById('search-count');if(sc)sc.textContent=`${txs.length} resultado${txs.length!==1?'s':''}`;
+  const sr=document.getElementById('search-results');if(sr)sr.innerHTML=txs.length?txs.map(t=>buildTxHTML(t,true)).join(''):'<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-text">Sin resultados</div></div>';
   updateBulkUI();
 }
-
-function toggleTxSelect(id, el) {
-  if (selectedTxIds.has(id)) { selectedTxIds.delete(id); el.classList.remove('selected'); }
-  else { selectedTxIds.add(id); el.classList.add('selected'); }
-  updateBulkUI();
-}
-
-function updateBulkUI() {
-  const count = selectedTxIds.size;
-  const bar = document.getElementById('bulk-bar');
-  bar.classList.toggle('show', count>0);
-  document.getElementById('bulk-count-text').textContent = `${count} seleccionado${count!==1?'s':''}`;
-}
-
-function bulkDelete() {
-  if (!confirm(`¿Eliminar ${selectedTxIds.size} movimientos?`)) return;
-  userData.movimientos = (userData.movimientos||[]).filter(m=>!selectedTxIds.has(m.id));
-  selectedTxIds.clear();
-  saveToFirestore().then(()=>showToast('Eliminados'));
-  doSearch();
-}
+function toggleTxSelect(id,el){if(selectedTxIds.has(id)){selectedTxIds.delete(id);el.classList.remove('selected');}else{selectedTxIds.add(id);el.classList.add('selected');}updateBulkUI();}
+function updateBulkUI(){const c=selectedTxIds.size;const b=document.getElementById('bulk-bar');b.classList.toggle('show',c>0);const t=document.getElementById('bulk-count-text');if(t)t.textContent=`${c} seleccionado${c!==1?'s':''}`;}
+function bulkDelete(){if(!confirm(`¿Eliminar ${selectedTxIds.size} movimientos?`))return;userData.movimientos=(userData.movimientos||[]).filter(m=>!selectedTxIds.has(m.id));selectedTxIds.clear();saveToFirestore().then(()=>{showToast('Eliminados');doSearch();});}
 
 // ══════════════════════════════════════════════
 //  BILLETERAS
 // ══════════════════════════════════════════════
-const WALLET_COLORS = ['#38bdf8','#4ade80','#fbbf24','#a78bfa','#f87171','#22d3ee','#f472b6','#94a3b8'];
-
-function calcWalletBalance(wallet, upToYear, upToMonth) {
-  const initials = userData.walletInitials||{};
-  let bal = initials[wallet]||0;
-  (userData.movimientos||[]).forEach(t => {
-    if (t.billetera!==wallet||t.estado!=='Pagado') return;
-    const [y,m]=t.fecha.split('-').map(Number);
-    if (y>upToYear||(y===upToYear&&m-1>upToMonth)) return;
-    if (t.tipo==='Ingreso') bal+=t.importe;
-    else if (t.tipo==='Gasto') bal-=t.importe;
+const WALLET_COLORS=['#38bdf8','#4ade80','#fbbf24','#a78bfa','#f87171','#22d3ee','#f472b6','#94a3b8'];
+function calcWalletBalance(wallet,upToYear,upToMonth){
+  let bal=(userData.walletInitials||{})[wallet]||0;
+  (userData.movimientos||[]).forEach(t=>{
+    if(t.billetera!==wallet||t.estado!=='Pagado')return;
+    const[y,m]=t.fecha.split('-').map(Number);
+    if(y>upToYear||(y===upToYear&&m-1>upToMonth))return;
+    if(t.tipo==='Ingreso')bal+=t.importe;else if(t.tipo==='Gasto')bal-=t.importe;
   });
   return bal;
 }
-
-function calcWalletMonth(wallet, year, month) {
-  let ing=0, gas=0;
-  (userData.movimientos||[]).forEach(t => {
-    if (t.billetera!==wallet||t.estado!=='Pagado') return;
-    const [y,m]=t.fecha.split('-').map(Number);
-    if (y!==year||m-1!==month) return;
-    if (t.tipo==='Ingreso') ing+=t.importe;
-    else if (t.tipo==='Gasto') gas+=t.importe;
+function calcWalletMonth(wallet,year,month){
+  let ing=0,gas=0;
+  (userData.movimientos||[]).forEach(t=>{
+    if(t.billetera!==wallet||t.estado!=='Pagado')return;
+    const[y,m]=t.fecha.split('-').map(Number);
+    if(y!==year||m-1!==month)return;
+    if(t.tipo==='Ingreso')ing+=t.importe;else if(t.tipo==='Gasto')gas+=t.importe;
   });
-  return {ing, gas};
+  return{ing,gas};
 }
-
-function renderWallets() {
-  const wallets = getUserWallets();
-  const {year,month} = currentPeriod;
-  document.getElementById('wallets-period-label').textContent = 'Al cierre de '+MESES[month]+' '+year;
-  document.getElementById('wallets-cards').innerHTML = wallets.map((w,i) => {
-    const color   = WALLET_COLORS[i%WALLET_COLORS.length];
-    const balance = calcWalletBalance(w,year,month);
-    const {ing,gas}=calcWalletMonth(w,year,month);
-    return `<div class="wallet-card" style="border-top-color:${color}">
-      <div class="wallet-name">${w}</div>
-      <div class="wallet-balance ${balance<0?'negative':''}">${fmtARS(balance)}</div>
-      <div class="wallet-stats">
-        <span class="wallet-stat-val inc">+${fmtARS(ing)}</span>
-        <span class="wallet-stat-val exp">-${fmtARS(gas)}</span>
-      </div>
-    </div>`;
-  }).join('');
-  const initials = userData.walletInitials||{};
-  document.getElementById('wallets-initial-inputs').innerHTML = wallets.map(w =>
-    `<div class="wallet-init-row">
-      <span class="wallet-init-label">${w}</span>
-      <input type="number" class="wallet-init-input" placeholder="0"
-        value="${initials[w]!==undefined?initials[w]:''}"
-        onchange="saveWalletInitial('${w.replace(/'/g,"\'")}',this.value)">
-    </div>`).join('');
-  const months6=[];
-  for (let i=5;i>=0;i--) { let m=month-i,y=year; if(m<0){m+=12;y--;} months6.push({y,m}); }
-  const thead=`<tr>${['Billetera',...months6.map(({y,m})=>MESES[m].slice(0,3)+' '+y)].map((h,i)=>`<th ${i===0?'':''}>${h}</th>`).join('')}</tr>`;
-  const rows=wallets.map(w=>`<tr><td>${w}</td>${months6.map(({y,m})=>{const b=calcWalletBalance(w,y,m);return `<td class="${b<0?'neg':'pos'}">${fmtARS(b)}</td>`}).join('')}</tr>`);
-  const totals=months6.map(({y,m})=>{const t=wallets.reduce((s,w)=>s+calcWalletBalance(w,y,m),0);return `<td class="${t<0?'neg':'pos'}">${fmtARS(t)}</td>`}).join('');
-  document.getElementById('wallets-table').innerHTML=`<thead>${thead}</thead><tbody>${rows.join('')}<tr><td>TOTAL</td>${totals}</tr></tbody>`;
+function renderWallets(){
+  const wallets=getUserWallets(),{year,month}=currentPeriod;
+  const wl=document.getElementById('wallets-period-label');if(wl)wl.textContent='Al cierre de '+MESES[month]+' '+year;
+  const wc=document.getElementById('wallets-cards');
+  if(wc)wc.innerHTML=wallets.map((w,i)=>{const color=WALLET_COLORS[i%WALLET_COLORS.length];const balance=calcWalletBalance(w,year,month);const{ing,gas}=calcWalletMonth(w,year,month);return `<div class="wallet-card" style="border-top-color:${color}"><div class="wallet-name">${w}</div><div class="wallet-balance ${balance<0?'negative':''}">${fmtARS(balance)}</div><div class="wallet-stats"><span class="wallet-stat-val inc">+${fmtARS(ing)}</span><span class="wallet-stat-val exp">-${fmtARS(gas)}</span></div></div>`;}).join('');
+  const initials=userData.walletInitials||{};
+  const wi=document.getElementById('wallets-initial-inputs');
+  if(wi)wi.innerHTML=wallets.map(w=>`<div class="wallet-init-row"><span class="wallet-init-label">${w}</span><input type="number" class="wallet-init-input" placeholder="0" value="${initials[w]!==undefined?initials[w]:''}" onchange="saveWalletInitial('${w.replace(/'/g,"\\'")}',this.value)"></div>`).join('');
+  const months6=[];for(let i=5;i>=0;i--){let m=month-i,y=year;if(m<0){m+=12;y--;}months6.push({y,m});}
+  const wt=document.getElementById('wallets-table');
+  if(wt){const thead=`<tr>${['Billetera',...months6.map(({y,m})=>MESES[m].slice(0,3)+' '+y)].map((h,i)=>`<th>${h}</th>`).join('')}</tr>`;const rows=wallets.map(w=>`<tr><td>${w}</td>${months6.map(({y,m})=>{const b=calcWalletBalance(w,y,m);return`<td class="${b<0?'neg':'pos'}">${fmtARS(b)}</td>`;}).join('')}</tr>`);const totals=months6.map(({y,m})=>{const t=wallets.reduce((s,w)=>s+calcWalletBalance(w,y,m),0);return`<td class="${t<0?'neg':'pos'}">${fmtARS(t)}</td>`;}).join('');wt.innerHTML=`<thead>${thead}</thead><tbody>${rows.join('')}<tr><td>TOTAL</td>${totals}</tr></tbody>`;}
 }
-
-async function saveWalletInitial(wallet,value) {
-  if (!userData.walletInitials) userData.walletInitials={};
-  userData.walletInitials[wallet]=parseFloat(value)||0;
-  await saveToFirestore();
-  renderWallets();
-  showToast('Saldo inicial guardado');
-}
+async function saveWalletInitial(w,v){if(!userData.walletInitials)userData.walletInitials={};userData.walletInitials[w]=parseFloat(v)||0;await saveToFirestore();renderWallets();showToast('Saldo guardado');}
 
 // ══════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════
-function renderConfig() {
-  renderCats();
-  renderWalletsConfig();
-  renderTarjetas();
-  renderMetas();
-  renderSharedList();
-}
-
-function renderCats() {
-  const cats = getUserCats();
-  document.getElementById('config-cats').innerHTML = cats.map(c => {
-    const col=CAT_COLORS[c]||'#94a3b8', icon=CAT_ICONS[c]||'💸';
-    return `<span class="tag" style="border-color:${col}33">
-      <span style="color:${col}">${icon} ${c}</span>
-      <button class="tag-edit" onclick="editItem('cat','${c.replace(/'/g,"\'")}','${icon}','${col}')">✏️</button>
-      <button class="tag-del" onclick="deleteItem('cat','${c.replace(/'/g,"\'")}')">✕</button>
-    </span>`;
-  }).join('');
-}
-
-function renderWalletsConfig() {
-  const wallets = getUserWallets();
-  document.getElementById('config-wallets').innerHTML = wallets.map(w =>
-    `<span class="tag">
-      ${w}
-      <button class="tag-edit" onclick="editItem('wallet','${w.replace(/'/g,"\'")}','','#38bdf8')">✏️</button>
-      <button class="tag-del" onclick="deleteItem('wallet','${w.replace(/'/g,"\'")}')">✕</button>
-    </span>`).join('');
-}
-
-function openAddItemModal(type, name, icon, color) {
-  const isCat = type==='cat';
-  document.getElementById('additem-title').textContent  = name ? `Editar ${isCat?'Categoría':'Billetera'}` : `Nueva ${isCat?'Categoría':'Billetera'}`;
-  document.getElementById('additem-type').value         = type;
-  document.getElementById('additem-editing').value      = name||'';
-  document.getElementById('additem-name').value         = name||'';
-  document.getElementById('additem-icon').value         = icon||'';
-  document.getElementById('additem-icon-row').style.display  = isCat?'':'none';
-  document.getElementById('additem-color-row').style.display = isCat?'':'none';
-  document.getElementById('additem-save-btn').textContent    = name?'Guardar cambios':'Agregar';
-  const selColor = color||'#38bdf8';
-  document.getElementById('additem-selected-color').value = selColor;
-  document.querySelectorAll('#additem-color-picker .color-swatch').forEach(sw => {
-    sw.classList.toggle('selected', sw.dataset.color===selColor);
-    sw.onclick=()=>{
-      document.querySelectorAll('#additem-color-picker .color-swatch').forEach(s=>s.classList.remove('selected'));
-      sw.classList.add('selected');
-      document.getElementById('additem-selected-color').value=sw.dataset.color;
-    };
-  });
+function renderConfig(){renderCats();renderWalletsConfig();renderTarjetas();renderMetas();renderSharedList();}
+function renderCats(){const cats=getUserCats();const el=document.getElementById('config-cats');if(!el)return;el.innerHTML=cats.map(c=>`<span class="tag" style="border-color:${CAT_COLORS[c]||'#94a3b8'}33"><span style="color:${CAT_COLORS[c]||'#94a3b8'}">${CAT_ICONS[c]||'💸'} ${c}</span><button class="tag-edit" onclick="openAddItemModal('cat','${c.replace(/'/g,"\\'")}','${CAT_ICONS[c]||'💸'}','${CAT_COLORS[c]||'#38bdf8'}')">✏️</button><button class="tag-del" onclick="deleteItem('cat','${c.replace(/'/g,"\\'")}')">✕</button></span>`).join('');}
+function renderWalletsConfig(){const ws=getUserWallets();const el=document.getElementById('config-wallets');if(!el)return;el.innerHTML=ws.map(w=>`<span class="tag">${w}<button class="tag-edit" onclick="openAddItemModal('wallet','${w.replace(/'/g,"\\'")}','','#38bdf8')">✏️</button><button class="tag-del" onclick="deleteItem('wallet','${w.replace(/'/g,"\\'")}')">✕</button></span>`).join('');}
+function openAddItemModal(type,name,icon,color){
+  const isCat=type==='cat';
+  document.getElementById('additem-title').textContent=name?`Editar ${isCat?'Categoría':'Billetera'}`:`Nueva ${isCat?'Categoría':'Billetera'}`;
+  document.getElementById('additem-type').value=type;
+  document.getElementById('additem-editing').value=name||'';
+  document.getElementById('additem-name').value=name||'';
+  document.getElementById('additem-icon').value=icon||'';
+  document.getElementById('additem-icon-row').style.display=isCat?'':'none';
+  document.getElementById('additem-color-row').style.display=isCat?'':'none';
+  document.getElementById('additem-save-btn').textContent=name?'Guardar cambios':'Agregar';
+  const selColor=color||'#38bdf8';
+  document.getElementById('additem-selected-color').value=selColor;
+  document.querySelectorAll('#additem-color-picker .color-swatch').forEach(sw=>{sw.classList.toggle('selected',sw.dataset.color===selColor);sw.onclick=()=>{document.querySelectorAll('#additem-color-picker .color-swatch').forEach(s=>s.classList.remove('selected'));sw.classList.add('selected');document.getElementById('additem-selected-color').value=sw.dataset.color;};});
   document.getElementById('additem-modal-overlay').classList.add('open');
   setTimeout(()=>document.getElementById('additem-name').focus(),100);
 }
-
-function editItem(type,name,icon,color) { openAddItemModal(type,name,icon,color); }
-
-function closeAddItemModal(e) {
-  if(!e||e.target===document.getElementById('additem-modal-overlay'))
-    document.getElementById('additem-modal-overlay').classList.remove('open');
-}
-
-function saveAddItem() {
-  const type    = document.getElementById('additem-type').value;
-  const editing = document.getElementById('additem-editing').value;
-  const name    = document.getElementById('additem-name').value.trim();
-  const icon    = document.getElementById('additem-icon').value.trim()||'💸';
-  const color   = document.getElementById('additem-selected-color').value;
-  if (!name) { showToast('Escribí un nombre'); return; }
-  if (type==='cat') {
-    if (!userData.customCats) userData.customCats=[...CATEGORIAS];
-    if (editing) { const idx=userData.customCats.indexOf(editing); if(idx>-1)userData.customCats[idx]=name; }
-    else { if(userData.customCats.includes(name)){showToast('Ya existe');return;} userData.customCats.push(name); }
-    CAT_ICONS[name]=icon; CAT_COLORS[name]=color;
-  } else {
-    if (!userData.customWallets) userData.customWallets=[...WALLETS];
-    if (editing) { const idx=userData.customWallets.indexOf(editing); if(idx>-1)userData.customWallets[idx]=name; }
-    else { if(userData.customWallets.includes(name)){showToast('Ya existe');return;} userData.customWallets.push(name); }
+function closeAddItemModal(e){if(!e||e.target===document.getElementById('additem-modal-overlay'))document.getElementById('additem-modal-overlay').classList.remove('open');}
+function saveAddItem(){
+  const type=document.getElementById('additem-type').value;
+  const editing=document.getElementById('additem-editing').value;
+  const name=document.getElementById('additem-name').value.trim();
+  const icon=document.getElementById('additem-icon').value.trim()||'💸';
+  const color=document.getElementById('additem-selected-color').value;
+  if(!name){showToast('Escribí un nombre');return;}
+  if(type==='cat'){
+    if(!userData.customCats)userData.customCats=[...CATEGORIAS];
+    if(editing){const idx=userData.customCats.indexOf(editing);if(idx>-1)userData.customCats[idx]=name;}
+    else{if(userData.customCats.includes(name)){showToast('Ya existe');return;}userData.customCats.push(name);}
+    CAT_ICONS[name]=icon;CAT_COLORS[name]=color;
+  }else{
+    if(!userData.customWallets)userData.customWallets=[...WALLETS];
+    if(editing){const idx=userData.customWallets.indexOf(editing);if(idx>-1)userData.customWallets[idx]=name;}
+    else{if(userData.customWallets.includes(name)){showToast('Ya existe');return;}userData.customWallets.push(name);}
   }
-  saveToFirestore();
-  closeAddItemModal(null);
-  renderConfig();
-  populateSelects();
-  showToast(editing?'✅ Actualizado':'✅ Agregado');
+  saveToFirestore();closeAddItemModal(null);renderConfig();populateSelects();showToast(editing?'✅ Actualizado':'✅ Agregado');
 }
+function deleteItem(type,name){if(!confirm(`¿Eliminar "${name}"?`))return;if(type==='cat'){if(!userData.customCats)userData.customCats=[...CATEGORIAS];userData.customCats=userData.customCats.filter(c=>c!==name);}else{if(!userData.customWallets)userData.customWallets=[...WALLETS];userData.customWallets=userData.customWallets.filter(w=>w!==name);}saveToFirestore();renderConfig();showToast('Eliminado');}
 
-function deleteItem(type, name) {
-  if (!confirm(`¿Eliminar "${name}"?`)) return;
-  if (type==='cat') {
-    if (!userData.customCats) userData.customCats=[...CATEGORIAS];
-    userData.customCats = userData.customCats.filter(c=>c!==name);
-  } else {
-    if (!userData.customWallets) userData.customWallets=[...WALLETS];
-    userData.customWallets = userData.customWallets.filter(w=>w!==name);
-  }
-  saveToFirestore(); renderConfig(); showToast('Eliminado');
-}
-
-// ══════════════════════════════════════════════
-//  TARJETAS
-// ══════════════════════════════════════════════
-function openTarjetaModal(id) {
-  if (id) {
-    const t=(userData.tarjetas||[]).find(t=>t.id==id);
-    if(!t)return;
-    document.getElementById('tarjeta-nombre').value     =t.nombre;
-    document.getElementById('tarjeta-cierre').value     =t.cierre;
-    document.getElementById('tarjeta-vencimiento').value=t.vencimiento;
-    document.getElementById('tarjeta-color-val').value  =t.color||'#1d4ed8';
-    document.getElementById('tarjeta-editing-id').value =id;
-  } else {
-    document.getElementById('tarjeta-nombre').value='';
-    document.getElementById('tarjeta-cierre').value='';
-    document.getElementById('tarjeta-vencimiento').value='';
-    document.getElementById('tarjeta-color-val').value='#1d4ed8';
-    document.getElementById('tarjeta-editing-id').value='';
-  }
-  document.querySelectorAll('#tarjeta-color-picker .color-swatch').forEach(sw=>{
-    sw.classList.toggle('selected',sw.dataset.color===(document.getElementById('tarjeta-color-val').value));
-    sw.onclick=()=>{
-      document.querySelectorAll('#tarjeta-color-picker .color-swatch').forEach(s=>s.classList.remove('selected'));
-      sw.classList.add('selected');
-      document.getElementById('tarjeta-color-val').value=sw.dataset.color;
-    };
-  });
+// ── Tarjetas ──
+function openTarjetaModal(id){
+  if(id){const t=(userData.tarjetas||[]).find(t=>t.id==id);if(!t)return;document.getElementById('tarjeta-nombre').value=t.nombre;document.getElementById('tarjeta-cierre').value=t.cierre;document.getElementById('tarjeta-vencimiento').value=t.vencimiento;document.getElementById('tarjeta-color-val').value=t.color||'#1d4ed8';document.getElementById('tarjeta-editing-id').value=id;}
+  else{document.getElementById('tarjeta-nombre').value='';document.getElementById('tarjeta-cierre').value='';document.getElementById('tarjeta-vencimiento').value='';document.getElementById('tarjeta-color-val').value='#1d4ed8';document.getElementById('tarjeta-editing-id').value='';}
+  document.querySelectorAll('#tarjeta-color-picker .color-swatch').forEach(sw=>{sw.classList.toggle('selected',sw.dataset.color===document.getElementById('tarjeta-color-val').value);sw.onclick=()=>{document.querySelectorAll('#tarjeta-color-picker .color-swatch').forEach(s=>s.classList.remove('selected'));sw.classList.add('selected');document.getElementById('tarjeta-color-val').value=sw.dataset.color;};});
   document.getElementById('tarjeta-modal-overlay').classList.add('open');
 }
-function closeTarjetaModal(e) {
-  if(!e||e.target===document.getElementById('tarjeta-modal-overlay'))
-    document.getElementById('tarjeta-modal-overlay').classList.remove('open');
-}
-async function saveTarjeta() {
-  const nombre     =document.getElementById('tarjeta-nombre').value.trim();
-  const cierre     =parseInt(document.getElementById('tarjeta-cierre').value)||0;
-  const vencimiento=parseInt(document.getElementById('tarjeta-vencimiento').value)||0;
-  const color      =document.getElementById('tarjeta-color-val').value;
-  const editId     =document.getElementById('tarjeta-editing-id').value;
-  if(!nombre||!cierre||!vencimiento){showToast('Completá todos los campos');return;}
-  if(!userData.tarjetas)userData.tarjetas=[];
-  if(editId){const idx=userData.tarjetas.findIndex(t=>t.id==editId);if(idx>-1)userData.tarjetas[idx]={id:editId,nombre,cierre,vencimiento,color};}
-  else userData.tarjetas.push({id:Date.now(),nombre,cierre,vencimiento,color});
-  await saveToFirestore();
-  document.getElementById('tarjeta-modal-overlay').classList.remove('open');
-  renderTarjetas();
-  showToast('💳 Tarjeta guardada');
-}
-function renderTarjetas() {
-  const tarjetas=userData.tarjetas||[];
-  const el=document.getElementById('tarjetas-list');
-  if(!el)return;
-  if(!tarjetas.length){el.innerHTML='<div style="font-size:13px;color:var(--text3);padding:8px 0">No hay tarjetas registradas</div>';return;}
-  const today=new Date().getDate();
-  el.innerHTML=tarjetas.map(t=>{
-    let dv=t.vencimiento-today; if(dv<0)dv+=31;
-    const alert=dv<=5?`<div class="tarjeta-alert warn">⚠️ Vence en ${dv} días</div>`:`<div class="tarjeta-alert ok">✓ Vence día ${t.vencimiento}</div>`;
-    const esPosterior=today>t.cierre;
-    return `<div class="tarjeta-card">
-      <div class="tarjeta-chip" style="background:${t.color||'#1d4ed8'}">💳</div>
-      <div class="tarjeta-info">
-        <div class="tarjeta-name">${t.nombre}</div>
-        <div class="tarjeta-dates">Cierre día ${t.cierre} · Compras → ${esPosterior?'próximo mes':'este mes'}</div>
-        ${alert}
-      </div>
-      <div style="display:flex;gap:6px">
-        <button class="btn-secondary" style="padding:5px 8px;font-size:12px" onclick="openTarjetaModal(${t.id})">✏️</button>
-        <button class="btn-danger" style="padding:5px 8px;font-size:12px" onclick="deleteTarjeta(${t.id})">🗑</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-async function deleteTarjeta(id) {
-  if(!confirm('¿Eliminar?'))return;
-  userData.tarjetas=(userData.tarjetas||[]).filter(t=>t.id!=id);
-  await saveToFirestore();
-  renderTarjetas();
-}
+function closeTarjetaModal(e){if(!e||e.target===document.getElementById('tarjeta-modal-overlay'))document.getElementById('tarjeta-modal-overlay').classList.remove('open');}
+async function saveTarjeta(){const nombre=document.getElementById('tarjeta-nombre').value.trim();const cierre=parseInt(document.getElementById('tarjeta-cierre').value)||0;const venc=parseInt(document.getElementById('tarjeta-vencimiento').value)||0;const color=document.getElementById('tarjeta-color-val').value;const editId=document.getElementById('tarjeta-editing-id').value;if(!nombre||!cierre||!venc){showToast('Completá todos los campos');return;}if(!userData.tarjetas)userData.tarjetas=[];if(editId){const idx=userData.tarjetas.findIndex(t=>t.id==editId);if(idx>-1)userData.tarjetas[idx]={id:editId,nombre,cierre,vencimiento:venc,color};}else userData.tarjetas.push({id:Date.now(),nombre,cierre,vencimiento:venc,color});await saveToFirestore();document.getElementById('tarjeta-modal-overlay').classList.remove('open');renderTarjetas();showToast('💳 Guardada');}
+function renderTarjetas(){const tarjetas=userData.tarjetas||[];const el=document.getElementById('tarjetas-list');if(!el)return;if(!tarjetas.length){el.innerHTML='<div style="font-size:13px;color:var(--text3);padding:8px 0">No hay tarjetas</div>';return;}const today=new Date().getDate();el.innerHTML=tarjetas.map(t=>{let dv=t.vencimiento-today;if(dv<0)dv+=31;const alert=dv<=5?`<div class="tarjeta-alert warn">⚠️ Vence en ${dv} días</div>`:`<div class="tarjeta-alert ok">✓ Día ${t.vencimiento}</div>`;return `<div class="tarjeta-card"><div class="tarjeta-chip" style="background:${t.color||'#1d4ed8'}">💳</div><div class="tarjeta-info"><div class="tarjeta-name">${t.nombre}</div><div class="tarjeta-dates">Cierre día ${t.cierre}</div>${alert}</div><div style="display:flex;gap:6px"><button class="btn-secondary" style="padding:5px 8px;font-size:12px" onclick="openTarjetaModal(${t.id})">✏️</button><button class="btn-danger" style="padding:5px 8px;font-size:12px" onclick="deleteTarjeta(${t.id})">🗑</button></div></div>`;}).join('');}
+async function deleteTarjeta(id){if(!confirm('¿Eliminar?'))return;userData.tarjetas=(userData.tarjetas||[]).filter(t=>t.id!=id);await saveToFirestore();renderTarjetas();}
 
-// ══════════════════════════════════════════════
-//  METAS
-// ══════════════════════════════════════════════
-function openMetaModal(id) {
-  if(id){
-    const m=(userData.metas||[]).find(m=>m.id==id);
-    if(!m)return;
-    document.getElementById('meta-nombre').value  =m.nombre;
-    document.getElementById('meta-objetivo').value=m.objetivo;
-    document.getElementById('meta-actual').value  =m.actual;
-    document.getElementById('meta-fecha').value   =m.fecha||'';
-    document.getElementById('meta-icon-val').value=m.icon||'✈️';
-    document.getElementById('meta-editing-id').value=id;
-    document.querySelectorAll('.icon-opt').forEach(el=>el.classList.toggle('active',el.textContent===(m.icon||'✈️')));
-  } else {
-    document.getElementById('meta-nombre').value='';
-    document.getElementById('meta-objetivo').value='';
-    document.getElementById('meta-actual').value='0';
-    document.getElementById('meta-fecha').value='';
-    document.getElementById('meta-icon-val').value='✈️';
-    document.getElementById('meta-editing-id').value='';
-    document.querySelectorAll('.icon-opt').forEach((el,i)=>el.classList.toggle('active',i===0));
-  }
-  document.getElementById('meta-modal-overlay').classList.add('open');
-}
+// ── Metas ──
+function openMetaModal(id){if(id){const m=(userData.metas||[]).find(m=>m.id==id);if(!m)return;document.getElementById('meta-nombre').value=m.nombre;document.getElementById('meta-objetivo').value=m.objetivo;document.getElementById('meta-actual').value=m.actual;document.getElementById('meta-fecha').value=m.fecha||'';document.getElementById('meta-icon-val').value=m.icon||'✈️';document.getElementById('meta-editing-id').value=id;document.querySelectorAll('.icon-opt').forEach(el=>el.classList.toggle('active',el.textContent===(m.icon||'✈️')));}else{document.getElementById('meta-nombre').value='';document.getElementById('meta-objetivo').value='';document.getElementById('meta-actual').value='0';document.getElementById('meta-fecha').value='';document.getElementById('meta-icon-val').value='✈️';document.getElementById('meta-editing-id').value='';document.querySelectorAll('.icon-opt').forEach((el,i)=>el.classList.toggle('active',i===0));}document.getElementById('meta-modal-overlay').classList.add('open');}
 function closeMetaModal(e){if(!e||e.target===document.getElementById('meta-modal-overlay'))document.getElementById('meta-modal-overlay').classList.remove('open');}
 function selectMetaIcon(el){document.querySelectorAll('.icon-opt').forEach(e=>e.classList.remove('active'));el.classList.add('active');document.getElementById('meta-icon-val').value=el.textContent;}
-async function saveMeta(){
-  const nombre  =document.getElementById('meta-nombre').value.trim();
-  const objetivo=parseFloat(document.getElementById('meta-objetivo').value)||0;
-  const actual  =parseFloat(document.getElementById('meta-actual').value)||0;
-  const fecha   =document.getElementById('meta-fecha').value;
-  const icon    =document.getElementById('meta-icon-val').value;
-  const editId  =document.getElementById('meta-editing-id').value;
-  if(!nombre||objetivo<=0){showToast('Completá nombre y objetivo');return;}
-  if(!userData.metas)userData.metas=[];
-  if(editId){const idx=userData.metas.findIndex(m=>m.id==editId);if(idx>-1)userData.metas[idx]={id:editId,nombre,objetivo,actual,fecha,icon};}
-  else userData.metas.push({id:Date.now(),nombre,objetivo,actual,fecha,icon});
-  await saveToFirestore();
-  document.getElementById('meta-modal-overlay').classList.remove('open');
-  renderMetas();
-  showToast('🎯 Meta guardada');
-}
-function renderMetas(){
-  const metas=userData.metas||[];
-  const el=document.getElementById('metas-list');if(!el)return;
-  if(!metas.length){el.innerHTML='<div style="font-size:13px;color:var(--text3);padding:8px 0">No hay metas. ¡Agregá una!</div>';return;}
-  el.innerHTML=metas.map(m=>{
-    const pct=Math.min(100,Math.round((m.actual/m.objetivo)*100));
-    const resta=Math.max(0,m.objetivo-m.actual);
-    const color=pct>=100?'var(--green)':pct>=60?'var(--accent)':'var(--yellow)';
-    const diasLeft=m.fecha?Math.ceil((new Date(m.fecha)-new Date())/86400000):null;
-    return `<div class="meta-card">
-      <div class="meta-header">
-        <div class="meta-icon">${m.icon||'🎯'}</div>
-        <div class="meta-info">
-          <div class="meta-name">${m.nombre}</div>
-          <div class="meta-date">${m.fecha?`${diasLeft>0?`${diasLeft} días restantes`:'¡Fecha cumplida!'}`:'Sin fecha'}</div>
-        </div>
-        <div class="meta-amounts">
-          <div class="meta-pct" style="color:${color}">${pct}%</div>
-          <div class="meta-rest">Falta ${fmtARS(resta)}</div>
-        </div>
-      </div>
-      <div class="budget-bar-bg"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-      <div class="meta-footer"><span>${fmtARS(m.actual)} ahorrados</span><span>Objetivo: ${fmtARS(m.objetivo)}</span></div>
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn-secondary" style="flex:1;font-size:12px" onclick="abonarMeta(${m.id})">+ Abonar</button>
-        <button class="btn-secondary" style="padding:6px 10px;font-size:12px" onclick="openMetaModal(${m.id})">✏️</button>
-        <button class="btn-danger" style="padding:6px 10px;font-size:12px" onclick="deleteMeta(${m.id})">🗑</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-function abonarMeta(id){
-  const monto=prompt('¿Cuánto querés abonar?');
-  if(!monto||isNaN(parseFloat(monto)))return;
-  const m=(userData.metas||[]).find(m=>m.id==id);if(!m)return;
-  m.actual=(m.actual||0)+parseFloat(monto);
-  saveToFirestore().then(()=>{renderMetas();showToast('💰 Abono registrado');});
-}
+async function saveMeta(){const nombre=document.getElementById('meta-nombre').value.trim();const objetivo=parseFloat(document.getElementById('meta-objetivo').value)||0;const actual=parseFloat(document.getElementById('meta-actual').value)||0;const fecha=document.getElementById('meta-fecha').value;const icon=document.getElementById('meta-icon-val').value;const editId=document.getElementById('meta-editing-id').value;if(!nombre||objetivo<=0){showToast('Completá nombre y objetivo');return;}if(!userData.metas)userData.metas=[];if(editId){const idx=userData.metas.findIndex(m=>m.id==editId);if(idx>-1)userData.metas[idx]={id:editId,nombre,objetivo,actual,fecha,icon};}else userData.metas.push({id:Date.now(),nombre,objetivo,actual,fecha,icon});await saveToFirestore();document.getElementById('meta-modal-overlay').classList.remove('open');renderMetas();showToast('🎯 Meta guardada');}
+function renderMetas(){const metas=userData.metas||[];const el=document.getElementById('metas-list');if(!el)return;if(!metas.length){el.innerHTML='<div style="font-size:13px;color:var(--text3);padding:8px 0">Sin metas</div>';return;}el.innerHTML=metas.map(m=>{const pct=Math.min(100,Math.round((m.actual/m.objetivo)*100));const resta=Math.max(0,m.objetivo-m.actual);const color=pct>=100?'var(--green)':pct>=60?'var(--accent)':'var(--yellow)';const diasLeft=m.fecha?Math.ceil((new Date(m.fecha)-new Date())/86400000):null;return `<div class="meta-card"><div class="meta-header"><div class="meta-icon">${m.icon||'🎯'}</div><div class="meta-info"><div class="meta-name">${m.nombre}</div><div class="meta-date">${m.fecha?(diasLeft>0?`${diasLeft} días`:'¡Cumplida!'):'Sin fecha'}</div></div><div class="meta-amounts"><div class="meta-pct" style="color:${color}">${pct}%</div><div class="meta-rest">Falta ${fmtARS(resta)}</div></div></div><div class="budget-bar-bg"><div class="budget-bar-fill" style="width:${pct}%;background:${color}"></div></div><div class="meta-footer"><span>${fmtARS(m.actual)}</span><span>Objetivo:${fmtARS(m.objetivo)}</span></div><div style="display:flex;gap:6px;margin-top:10px"><button class="btn-secondary" style="flex:1;font-size:12px" onclick="abonarMeta(${m.id})">+Abonar</button><button class="btn-secondary" style="padding:6px 10px;font-size:12px" onclick="openMetaModal(${m.id})">✏️</button><button class="btn-danger" style="padding:6px 10px;font-size:12px" onclick="deleteMeta(${m.id})">🗑</button></div></div>`;}).join('');}
+function abonarMeta(id){const monto=prompt('¿Cuánto querés abonar?');if(!monto||isNaN(parseFloat(monto)))return;const m=(userData.metas||[]).find(m=>m.id==id);if(!m)return;m.actual=(m.actual||0)+parseFloat(monto);saveToFirestore().then(()=>{renderMetas();showToast('💰 Abono registrado');});}
 async function deleteMeta(id){if(!confirm('¿Eliminar?'))return;userData.metas=(userData.metas||[]).filter(m=>m.id!=id);await saveToFirestore();renderMetas();}
+
+// ── Share ──
+async function shareAccess(){const email=document.getElementById('share-email').value.trim();const role=document.getElementById('share-role').value;if(!email){showToast('Ingresá un email');return;}try{const users=await fsList('users');const target=users.find(u=>u.email===email);if(!target){showToast('❌ Usuario no encontrado');return;}if(!userData.sharedWith)userData.sharedWith={};userData.sharedWith[target.id]={email,role,since:new Date().toISOString()};await saveToFirestore();document.getElementById('share-email').value='';renderSharedList();showToast('✅ Acceso compartido');}catch(e){showToast('Error: '+e.message);}}
+function renderSharedList(){const shared=userData.sharedWith||{};const el=document.getElementById('share-list');if(!el)return;const entries=Object.entries(shared);if(!entries.length){el.innerHTML='';return;}el.innerHTML=entries.map(([uid,info])=>`<div class="share-row"><div class="share-info"><div class="share-email">${info.email}</div><div class="share-role">${info.role==='editor'?'Colaborador':'Solo lectura'}</div></div><button class="btn-danger" style="padding:5px 10px;font-size:11px" onclick="revokeShare('${uid}')">Revocar</button></div>`).join('');}
+async function revokeShare(uid){if(!confirm('¿Revocar acceso?'))return;delete userData.sharedWith[uid];await saveToFirestore();renderSharedList();showToast('Revocado');}
+
+// ── Export ──
+function exportCSV(){const txs=getTxPeriod();const header='Fecha,Tipo,Concepto,Categoría,Billetera,Importe,Estado\n';const rows=txs.map(t=>[t.fecha,t.tipo,`"${t.concepto}"`,t.categoria,t.billetera||'',t.importe,t.estado].join(',')).join('\n');const blob=new Blob([header+rows],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`flowcash_${MESES[currentPeriod.month]}_${currentPeriod.year}.csv`;a.click();URL.revokeObjectURL(url);showToast('CSV exportado');}
+function exportPDF(){if(!window.jspdf){showToast('PDF no disponible');return;}const{jsPDF}=window.jspdf;const txs=getTxPeriod();const periodo=MESES[currentPeriod.month]+' '+currentPeriod.year;const doc=new jsPDF();const ing=txs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0);const gas=txs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0);doc.setFontSize(20);doc.text('FlowCash — '+periodo,14,20);doc.setFontSize(12);doc.text('Ingresos: $'+ing.toLocaleString('es-AR'),14,42);doc.text('Gastos:   $'+gas.toLocaleString('es-AR'),14,50);doc.text('Balance:  $'+(ing-gas).toLocaleString('es-AR'),14,58);doc.autoTable({startY:68,head:[['Fecha','Concepto','Tipo','Importe','Estado']],body:txs.map(t=>[t.fecha,t.concepto,t.tipo,'$'+t.importe.toLocaleString('es-AR'),t.estado]),styles:{fontSize:8}});doc.save(`flowcash_${periodo.replace(' ','_')}.pdf`);showToast('PDF generado');}
+async function importCSV(input){const file=input.files[0];if(!file)return;const text=await file.text();const lines=text.split('\n').filter(l=>l.trim());const sep=lines[0].includes(';')?';':',';const cols=lines[0].toLowerCase().split(sep).map(h=>h.trim().replace(/"/g,''));const idx={fecha:cols.findIndex(h=>h.includes('fecha')),tipo:cols.findIndex(h=>h.includes('tipo')),concepto:cols.findIndex(h=>h.includes('concepto')||h.includes('descripci')),categoria:cols.findIndex(h=>h.includes('categ')),billetera:cols.findIndex(h=>h.includes('billetera')||h.includes('cuenta')),importe:cols.findIndex(h=>h.includes('importe')||h.includes('monto')),estado:cols.findIndex(h=>h.includes('estado'))};const imported=[];lines.slice(1).forEach((line,i)=>{if(!line.trim())return;const vals=line.split(sep).map(v=>v.trim().replace(/^"|"$/g,''));const imp=parseFloat((vals[idx.importe]||'0').replace(/[^0-9.-]/g,''));if(!imp)return;imported.push({id:Date.now()+i,fecha:vals[idx.fecha]||new Date().toISOString().split('T')[0],tipo:vals[idx.tipo]||'Gasto',concepto:vals[idx.concepto]||'Importado',categoria:vals[idx.categoria]||'Personal',billetera:vals[idx.billetera]||'Varios',importe:Math.abs(imp),divisa:'-',estado:vals[idx.estado]||'Pagado',comentarios:'CSV'});});if(!imported.length){const r=document.getElementById('csv-import-result');if(r)r.innerHTML='<span style="color:var(--red)">❌ Sin datos</span>';return;}if(!confirm(`¿Importar ${imported.length} movimientos?`))return;userData.movimientos.push(...imported);await saveToFirestore();renderAll();const r=document.getElementById('csv-import-result');if(r)r.innerHTML=`<span style="color:var(--green)">✅ ${imported.length} importados</span>`;input.value='';}
 
 // ══════════════════════════════════════════════
 //  NOTIFICACIONES
 // ══════════════════════════════════════════════
-function getNotifications(){
-  const today=new Date(),todayStr=today.toISOString().split('T')[0];
-  const notifs=[];
-  (userData.movimientos||[]).filter(t=>t.estado==='Pendiente'&&t.fecha<todayStr).forEach(t=>{
-    const dias=Math.floor((today-new Date(t.fecha+'T12:00:00'))/86400000);
-    notifs.push({type:dias>7?'danger':'warn',title:`⏰ Pago vencido: ${t.concepto}`,desc:`Venció hace ${dias} día${dias>1?'s':''} · ${fmtARS(t.importe)}`,id:t.id});
-  });
-  const in7=new Date(today);in7.setDate(in7.getDate()+7);
-  const in7Str=in7.toISOString().split('T')[0];
-  (userData.movimientos||[]).filter(t=>t.estado==='Pendiente'&&t.fecha>=todayStr&&t.fecha<=in7Str).forEach(t=>{
-    const dias=Math.ceil((new Date(t.fecha+'T12:00:00')-today)/86400000);
-    notifs.push({type:'info',title:`📅 Próximo vencimiento: ${t.concepto}`,desc:`Vence en ${dias} día${dias!==1?'s':''} · ${fmtARS(t.importe)}`,id:t.id});
-  });
-  return notifs;
-}
-function updateNotifBadge(){
-  const n=getNotifications().length;
-  const b=document.getElementById('notif-badge');
-  b.style.display=n>0?'flex':'none';
-  b.textContent=n>9?'9+':n;
-}
-function openNotifPanel(){
-  const notifs=getNotifications();
-  document.getElementById('notif-list').innerHTML=notifs.length
-    ?notifs.map(n=>`<div class="notif-item ${n.type}" ${n.id?`onclick="closeNotifPanel();marcarPagado(${n.id})" style="cursor:pointer"`:''}>
-        <div class="notif-title">${n.title}</div>
-        <div class="notif-desc">${n.desc}</div>
-      </div>`).join('')
-    :'<div style="text-align:center;padding:30px;color:var(--text3)">✅ Todo al día</div>';
-  document.getElementById('notif-panel').classList.add('open');
-  document.getElementById('notif-overlay').classList.add('open');
-}
-function closeNotifPanel(){
-  document.getElementById('notif-panel').classList.remove('open');
-  document.getElementById('notif-overlay').classList.remove('open');
-}
+function getNotifications(){const today=new Date(),todayStr=today.toISOString().split('T')[0];const notifs=[];(userData.movimientos||[]).filter(t=>t.estado==='Pendiente'&&t.fecha<todayStr).forEach(t=>{const dias=Math.floor((today-new Date(t.fecha+'T12:00:00'))/86400000);notifs.push({type:dias>7?'danger':'warn',title:`⏰ Vencido: ${t.concepto}`,desc:`Hace ${dias} día${dias>1?'s':''} · ${fmtARS(t.importe)}`,id:t.id});});const in7=new Date(today);in7.setDate(in7.getDate()+7);const in7Str=in7.toISOString().split('T')[0];(userData.movimientos||[]).filter(t=>t.estado==='Pendiente'&&t.fecha>=todayStr&&t.fecha<=in7Str).forEach(t=>{const dias=Math.ceil((new Date(t.fecha+'T12:00:00')-today)/86400000);notifs.push({type:'info',title:`📅 Próximo: ${t.concepto}`,desc:`En ${dias} día${dias!==1?'s':''} · ${fmtARS(t.importe)}`,id:t.id});});return notifs;}
+function updateNotifBadge(){const n=getNotifications().length;const b=document.getElementById('notif-badge');if(b){b.style.display=n>0?'flex':'none';b.textContent=n>9?'9+':n;}}
+function openNotifPanel(){const notifs=getNotifications();const el=document.getElementById('notif-list');if(el)el.innerHTML=notifs.length?notifs.map(n=>`<div class="notif-item ${n.type}" ${n.id?`onclick="closeNotifPanel();marcarPagado(${n.id})" style="cursor:pointer"`:''} ><div class="notif-title">${n.title}</div><div class="notif-desc">${n.desc}</div></div>`).join(''):'<div style="text-align:center;padding:30px;color:var(--text3)">✅ Todo al día</div>';document.getElementById('notif-panel').classList.add('open');document.getElementById('notif-overlay').classList.add('open');}
+function closeNotifPanel(){document.getElementById('notif-panel').classList.remove('open');document.getElementById('notif-overlay').classList.remove('open');}
 
 // ══════════════════════════════════════════════
 //  DOLAR
 // ══════════════════════════════════════════════
-function toggleDolarPanel(){
-  document.getElementById('dolar-panel').classList.toggle('open');
-  document.getElementById('dolar-overlay').classList.toggle('open');
-}
-async function fetchDolar(){
-  try {
-    const r=await fetch('https://dolarapi.com/v1/dolares');
-    if(!r.ok)throw new Error();
-    const data=await r.json();
-    const blue=data.find(d=>d.casa==='blue');
-    const oficial=data.find(d=>d.casa==='oficial');
-    const mep=data.find(d=>d.casa==='bolsa');
-    const ccl=data.find(d=>d.casa==='contadoconliquidacion');
-    if(blue){DOLAR_RATES.blue=blue.venta;document.getElementById('dolar-val').textContent='$'+blue.venta.toLocaleString('es-AR');document.getElementById('dp-blue').textContent='$'+blue.venta.toLocaleString('es-AR');}
-    if(oficial)document.getElementById('dp-oficial').textContent='$'+oficial.venta.toLocaleString('es-AR');
-    if(mep)document.getElementById('dp-mep').textContent='$'+mep.venta.toLocaleString('es-AR');
-    if(ccl)document.getElementById('dp-ccl').textContent='$'+ccl.venta.toLocaleString('es-AR');
-    document.getElementById('dp-updated').textContent='Actualizado '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
-    // Otras monedas
-    try {
-      const r2=await fetch('https://open.er-api.com/v6/latest/USD');
-      if(r2.ok){const fx=await r2.json();const arsB=DOLAR_RATES.blue||1;
-        DOLAR_RATES.EUR=fx.rates?.EUR?arsB/fx.rates.EUR:0;
-        DOLAR_RATES.BRL=fx.rates?.BRL?arsB/fx.rates.BRL:0;
-        DOLAR_RATES.GBP=fx.rates?.GBP?arsB/fx.rates.GBP:0;
-        DOLAR_RATES.UYU=fx.rates?.UYU?arsB/fx.rates.UYU:0;
-        DOLAR_RATES.CLP=fx.rates?.CLP?arsB/fx.rates.CLP:0;}
-    } catch(e){}
-  } catch(e){}
-}
+function toggleDolarPanel(){document.getElementById('dolar-panel').classList.toggle('open');document.getElementById('dolar-overlay').classList.toggle('open');}
+async function fetchDolar(){try{const r=await fetch('https://dolarapi.com/v1/dolares');if(!r.ok)return;const data=await r.json();const blue=data.find(d=>d.casa==='blue');const oficial=data.find(d=>d.casa==='oficial');const mep=data.find(d=>d.casa==='bolsa');const ccl=data.find(d=>d.casa==='contadoconliquidacion');if(blue){DOLAR_RATES.blue=blue.venta;const dv=document.getElementById('dolar-val');if(dv)dv.textContent='$'+blue.venta.toLocaleString('es-AR');const db2=document.getElementById('dp-blue');if(db2)db2.textContent='$'+blue.venta.toLocaleString('es-AR');}if(oficial){const dp=document.getElementById('dp-oficial');if(dp)dp.textContent='$'+oficial.venta.toLocaleString('es-AR');}if(mep){const dm=document.getElementById('dp-mep');if(dm)dm.textContent='$'+mep.venta.toLocaleString('es-AR');}if(ccl){const dc=document.getElementById('dp-ccl');if(dc)dc.textContent='$'+ccl.venta.toLocaleString('es-AR');}const du=document.getElementById('dp-updated');if(du)du.textContent='Actualizado '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});}catch(e){}}
 
 // ══════════════════════════════════════════════
 //  THEME
 // ══════════════════════════════════════════════
-const THEMES = {
-  dark:    { name:'Dark', '--bg':'#0f172a','--surface':'#1e293b','--surface2':'#263347','--border':'#334155','--border2':'#1e293b','--text':'#f1f5f9','--text2':'#94a3b8','--text3':'#64748b','--accent':'#38bdf8','--accent2':'#0ea5e9','--green':'#4ade80','--red':'#f87171','--yellow':'#fbbf24','--purple':'#a78bfa' },
-  light:   { name:'Claro', '--bg':'#f8fafc','--surface':'#ffffff','--surface2':'#f1f5f9','--border':'#e2e8f0','--border2':'#f1f5f9','--text':'#0f172a','--text2':'#475569','--text3':'#94a3b8','--accent':'#2563eb','--accent2':'#1d4ed8','--green':'#16a34a','--red':'#dc2626','--yellow':'#d97706','--purple':'#7c3aed' },
-  midnight:{ name:'Midnight', '--bg':'#0a0a1a','--surface':'#12122a','--surface2':'#1a1a35','--border':'#252545','--border2':'#12122a','--text':'#e8e8ff','--text2':'#a0a0cc','--text3':'#606090','--accent':'#818cf8','--accent2':'#6366f1','--green':'#34d399','--red':'#f87171','--yellow':'#fbbf24','--purple':'#c084fc' },
-  forest:  { name:'Verde', '--bg':'#0a1a0f','--surface':'#0f2d18','--surface2':'#163d20','--border':'#1f5530','--border2':'#0f2d18','--text':'#ecfdf5','--text2':'#86efac','--text3':'#4ade80','--accent':'#22c55e','--accent2':'#16a34a','--green':'#86efac','--red':'#f87171','--yellow':'#fbbf24','--purple':'#a78bfa' },
-  sunset:  { name:'Sunset', '--bg':'#1a0a0a','--surface':'#2d1010','--surface2':'#3d1616','--border':'#551f1f','--border2':'#2d1010','--text':'#fff1f2','--text2':'#fca5a5','--text3':'#ef4444','--accent':'#f97316','--accent2':'#ea580c','--green':'#4ade80','--red':'#fca5a5','--yellow':'#fbbf24','--purple':'#a78bfa' },
-};
-let currentTheme = localStorage.getItem('fc_theme')||'dark';
-
-function applyTheme(name){
-  const theme=THEMES[name]||THEMES.dark;
-  const root=document.documentElement;
-  Object.entries(theme).forEach(([k,v])=>{ if(k!=='name') root.style.setProperty(k,v); });
-  currentTheme=name;
-  localStorage.setItem('fc_theme',name);
-  document.querySelectorAll('.theme-preset-btn').forEach(b=>b.classList.toggle('active',b.dataset.theme===name));
-}
-
-function applyCustomColor(val){
-  document.documentElement.style.setProperty('--accent',val);
-  document.documentElement.style.setProperty('--accent2',val);
-  localStorage.setItem('fc_custom_color',val);
-}
-
-function resetTheme(){
-  localStorage.removeItem('fc_theme');
-  localStorage.removeItem('fc_custom_color');
-  applyTheme('dark');
-  document.getElementById('custom-primary').value='#38bdf8';
-  showToast('Tema restaurado');
-}
-
-function loadSavedTheme(){
-  applyTheme(localStorage.getItem('fc_theme')||'dark');
-  const customColor=localStorage.getItem('fc_custom_color');
-  if(customColor){
-    document.documentElement.style.setProperty('--accent',customColor);
-    document.getElementById('custom-primary').value=customColor;
-  }
-}
-
-function renderThemePanel(){
-  document.getElementById('theme-presets').innerHTML=Object.entries(THEMES).map(([k,t])=>
-    `<button class="btn-secondary theme-preset-btn ${currentTheme===k?'active':''}" data-theme="${k}"
-      style="text-align:left;padding:10px 12px;${currentTheme===k?'border-color:var(--accent);color:var(--accent)':''}"
-      onclick="applyTheme('${k}')">${t.name}</button>`
-  ).join('');
-}
-
-function openThemePanel(){
-  renderThemePanel();
-  document.getElementById('theme-panel').classList.add('open');
-  document.getElementById('theme-overlay').classList.add('open');
-}
-function closeThemePanel(){
-  document.getElementById('theme-panel').classList.remove('open');
-  document.getElementById('theme-overlay').classList.remove('open');
-}
+const THEMES={dark:{name:'Dark','--bg':'#0f172a','--surface':'#1e293b','--surface2':'#263347','--border':'#334155','--border2':'#1e293b','--text':'#f1f5f9','--text2':'#94a3b8','--text3':'#64748b','--accent':'#38bdf8','--accent2':'#0ea5e9','--green':'#4ade80','--red':'#f87171','--yellow':'#fbbf24','--purple':'#a78bfa'},light:{name:'Claro','--bg':'#f8fafc','--surface':'#ffffff','--surface2':'#f1f5f9','--border':'#e2e8f0','--border2':'#f1f5f9','--text':'#0f172a','--text2':'#475569','--text3':'#94a3b8','--accent':'#2563eb','--accent2':'#1d4ed8','--green':'#16a34a','--red':'#dc2626','--yellow':'#d97706','--purple':'#7c3aed'},midnight:{name:'Midnight','--bg':'#0a0a1a','--surface':'#12122a','--surface2':'#1a1a35','--border':'#252545','--border2':'#12122a','--text':'#e8e8ff','--text2':'#a0a0cc','--text3':'#606090','--accent':'#818cf8','--accent2':'#6366f1','--green':'#34d399','--red':'#f87171','--yellow':'#fbbf24','--purple':'#c084fc'},forest:{name:'Verde','--bg':'#0a1a0f','--surface':'#0f2d18','--surface2':'#163d20','--border':'#1f5530','--border2':'#0f2d18','--text':'#ecfdf5','--text2':'#86efac','--text3':'#4ade80','--accent':'#22c55e','--accent2':'#16a34a','--green':'#86efac','--red':'#f87171','--yellow':'#fbbf24','--purple':'#a78bfa'}};
+let currentTheme=localStorage.getItem('fc_theme')||'dark';
+function applyTheme(name){const theme=THEMES[name]||THEMES.dark;Object.entries(theme).forEach(([k,v])=>{if(k!=='name')document.documentElement.style.setProperty(k,v);});currentTheme=name;localStorage.setItem('fc_theme',name);document.querySelectorAll('.theme-preset-btn').forEach(b=>b.classList.toggle('active',b.dataset.theme===name));}
+function applyCustomColor(val){document.documentElement.style.setProperty('--accent',val);document.documentElement.style.setProperty('--accent2',val);localStorage.setItem('fc_custom_color',val);}
+function resetTheme(){localStorage.removeItem('fc_theme');localStorage.removeItem('fc_custom_color');applyTheme('dark');const cp=document.getElementById('custom-primary');if(cp)cp.value='#38bdf8';showToast('Tema restaurado');}
+function loadSavedTheme(){applyTheme(localStorage.getItem('fc_theme')||'dark');const cc=localStorage.getItem('fc_custom_color');if(cc){document.documentElement.style.setProperty('--accent',cc);const cp=document.getElementById('custom-primary');if(cp)cp.value=cc;}}
+function renderThemePanel(){const el=document.getElementById('theme-presets');if(el)el.innerHTML=Object.entries(THEMES).map(([k,t])=>`<button class="btn-secondary theme-preset-btn ${currentTheme===k?'active':''}" data-theme="${k}" style="text-align:left;padding:10px 12px;${currentTheme===k?'border-color:var(--accent);color:var(--accent)':''}" onclick="applyTheme('${k}')">${t.name}</button>`).join('');}
+function openThemePanel(){renderThemePanel();document.getElementById('theme-panel').classList.add('open');document.getElementById('theme-overlay').classList.add('open');}
+function closeThemePanel(){document.getElementById('theme-panel').classList.remove('open');document.getElementById('theme-overlay').classList.remove('open');}
 
 // ══════════════════════════════════════════════
-//  MODAL NUEVO MOVIMIENTO
+//  MODAL MOVIMIENTO
 // ══════════════════════════════════════════════
 function openModal(){
   document.getElementById('modal-editing-id').value='';
@@ -3711,269 +3020,59 @@ function openModal(){
   document.getElementById('m-importe').value='';
   document.getElementById('m-concepto').value='';
   document.getElementById('m-comentarios').value='';
-  document.getElementById('m-divisa').value='';
-  setTipo('Gasto', document.querySelector('[data-tipo="Gasto"]'));
-  setEstado('Pagado', document.querySelector('[data-estado="Pagado"]'));
-  // Reset toggles
-  ['toggle-cuotas','toggle-fijo','toggle-divisa'].forEach(id=>{
-    const el=document.getElementById(id);if(el)el.classList.remove('on');
-  });
-  document.getElementById('cuotas-body').style.display='none';
-  document.getElementById('fijo-body').style.display='none';
-  document.getElementById('divisa-body').style.display='none';
-  document.getElementById('chip-cuotas-calc').style.display='none';
-  document.getElementById('chip-divisa-calc').style.display='none';
-  document.getElementById('m-cuotas').value=1;
-  document.getElementById('m-interes').value=0;
-  document.getElementById('m-cuota-desde').value=1;
-  document.getElementById('m-meses-fijo').value=12;
+  setTipo('Gasto',document.querySelector('[data-tipo="Gasto"]'));
+  setEstado('Pagado',document.querySelector('[data-estado="Pagado"]'));
+  ['toggle-cuotas','toggle-fijo','toggle-divisa'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.remove('on');});
+  ['cuotas-body','fijo-body','divisa-body'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  ['chip-cuotas-calc','chip-divisa-calc'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+  document.getElementById('m-cuotas').value=1;document.getElementById('m-interes').value=0;document.getElementById('m-cuota-desde').value=1;document.getElementById('m-meses-fijo').value=12;
   populateSelects();
   document.getElementById('modal-overlay').classList.add('open');
 }
-
-function closeModalOutside(e){
-  if(e.target===document.getElementById('modal-overlay')){
-    document.getElementById('modal-overlay').classList.remove('open');
-  }
-}
-
-function setTipo(tipo, el){
-  document.querySelectorAll('.type-btn').forEach(b=>b.className='type-btn');
-  if(el) el.className=`type-btn active-${tipo.toLowerCase()}`;
-  const isTransfer = tipo==='Transferencia';
-  document.getElementById('m-sec-wallet-dest').style.display = isTransfer?'':'none';
-  // Hide cat for transfer/ahorro
-  document.querySelector('label[for="m-categoria"]')?.closest('.mform-group')?.style;
-}
-
-function setEstado(estado, el){
-  document.querySelectorAll('.estado-btn').forEach(b=>b.className='estado-btn');
-  if(el) el.className=`estado-btn active-${estado.toLowerCase()}`;
-}
-
-function toggleCuotasModal(){
-  const btn=document.getElementById('toggle-cuotas');
-  const on=btn.classList.toggle('on');
-  document.getElementById('cuotas-body').style.display=on?'':'none';
-  if(!on){document.getElementById('m-cuotas').value=1;document.getElementById('m-cuota-desde').value=1;document.getElementById('m-interes').value=0;document.getElementById('chip-cuotas-calc').style.display='none';}
-}
-function toggleFijoModal(){
-  const btn=document.getElementById('toggle-fijo');
-  btn.classList.toggle('on');
-  document.getElementById('fijo-body').style.display=btn.classList.contains('on')?'':'none';
-}
-function toggleDivisaModal(){
-  const btn=document.getElementById('toggle-divisa');
-  const on=btn.classList.toggle('on');
-  document.getElementById('divisa-body').style.display=on?'':'none';
-  if(!on){document.getElementById('m-divisa').value='';document.getElementById('chip-divisa-calc').style.display='none';}
-  else if(DOLAR_RATES.blue>0){document.getElementById('m-divisa-cotiz').value=DOLAR_RATES.blue;}
-}
-function recalcChip(){
-  const cuotas=parseInt(document.getElementById('m-cuotas')?.value)||1;
-  const desde =parseInt(document.getElementById('m-cuota-desde')?.value)||1;
-  const importe=parseFloat(document.getElementById('m-importe')?.value)||0;
-  const interes=parseFloat(document.getElementById('m-interes')?.value)||0;
-  const chip=document.getElementById('chip-cuotas-calc');
-  if(!chip)return;
-  if(cuotas<=1){chip.style.display='none';return;}
-  const total=importe*(1+interes/100);
-  const cuota=Math.round(total/cuotas*100)/100;
-  const restantes=cuotas-desde+1;
-  chip.style.display='block';
-  chip.textContent=`${restantes} cuotas (${desde}/${cuotas}→${cuotas}/${cuotas}) · ${fmtARS(cuota)} c/u${interes>0?' · Total '+fmtARS(total):''}`;
-}
-function onDivisaMonedaChange(){
-  const moneda=document.getElementById('m-divisa-moneda').value;
-  const tipoSel=document.getElementById('m-divisa-tipo');
-  const cotizInput=document.getElementById('m-divisa-cotiz');
-  if(moneda==='USD'){tipoSel.disabled=false;onDivisaTipoChange();}
-  else if(moneda==='OTHER'){tipoSel.value='manual';tipoSel.disabled=true;cotizInput.readOnly=false;cotizInput.value='';}
-  else{tipoSel.value='auto';tipoSel.disabled=true;const rate=DOLAR_RATES[moneda]||0;if(rate>0){cotizInput.value=Math.round(rate*100)/100;cotizInput.readOnly=true;}else{cotizInput.readOnly=false;cotizInput.value='';}}
-  updateDivisaTotal();
-}
-function onDivisaTipoChange(){
-  const tipo=document.getElementById('m-divisa-tipo').value;
-  const cotizInput=document.getElementById('m-divisa-cotiz');
-  if(tipo==='manual'){cotizInput.readOnly=false;cotizInput.value='';}
-  else{const rate=DOLAR_RATES[tipo]||0;cotizInput.value=rate?Math.round(rate):'';cotizInput.readOnly=!!rate;}
-  updateDivisaTotal();
-}
-function updateDivisaTotal(){
-  const cotiz=parseFloat(document.getElementById('m-divisa-cotiz')?.value)||0;
-  const monto=parseFloat(document.getElementById('m-divisa-monto')?.value)||0;
-  const moneda=document.getElementById('m-divisa-moneda')?.value||'USD';
-  const tipo=document.getElementById('m-divisa-tipo')?.value||'manual';
-  const chip=document.getElementById('chip-divisa-calc');
-  if(cotiz>0&&monto>0){
-    const total=Math.round(cotiz*monto*100)/100;
-    if(chip){chip.style.display='block';chip.textContent=`${monto} ${moneda} × ${fmtARS(cotiz)} (${tipo}) = ${fmtARS(total)}`;}
-    document.getElementById('m-importe').value=total;
-    document.getElementById('m-divisa').value=`${moneda}:${monto}:Cotiz:${cotiz}(${tipo})`;
-  } else {
-    if(chip)chip.style.display='none';
-    document.getElementById('m-divisa').value='';
-  }
-}
-
-function checkCierreWarning(fecha,billetera){
-  if(!fecha||!billetera)return null;
-  const tarjeta=(userData.tarjetas||[]).find(t=>
-    t.nombre.toLowerCase().includes(billetera.toLowerCase())||
-    billetera.toLowerCase().includes(t.nombre.toLowerCase().split(' ')[0]));
-  if(!tarjeta)return null;
-  const dia=parseInt(fecha.split('-')[2]);
-  if(dia>tarjeta.cierre)return `⚠️ Fecha posterior al cierre (día ${tarjeta.cierre}) de ${tarjeta.nombre} — se acreditará el mes que viene`;
-  return null;
-}
+function closeModalOutside(e){if(e.target===document.getElementById('modal-overlay'))document.getElementById('modal-overlay').classList.remove('open');}
+function setTipo(tipo,el){document.querySelectorAll('.type-btn').forEach(b=>b.className='type-btn');if(el)el.className=`type-btn active-${tipo.toLowerCase()}`;document.getElementById('m-sec-wallet-dest').style.display=tipo==='Transferencia'?'':'none';}
+function setEstado(estado,el){document.querySelectorAll('.estado-btn').forEach(b=>b.className='estado-btn');if(el)el.className=`estado-btn active-${estado.toLowerCase()}`;}
+function toggleCuotasModal(){const btn=document.getElementById('toggle-cuotas');const on=btn.classList.toggle('on');document.getElementById('cuotas-body').style.display=on?'':'none';if(!on){document.getElementById('chip-cuotas-calc').style.display='none';}}
+function toggleFijoModal(){const btn=document.getElementById('toggle-fijo');btn.classList.toggle('on');document.getElementById('fijo-body').style.display=btn.classList.contains('on')?'':'none';}
+function toggleDivisaModal(){const btn=document.getElementById('toggle-divisa');const on=btn.classList.toggle('on');document.getElementById('divisa-body').style.display=on?'':'none';if(on&&DOLAR_RATES.blue>0)document.getElementById('m-divisa-cotiz').value=Math.round(DOLAR_RATES.blue);}
+function recalcChip(){const cuotas=parseInt(document.getElementById('m-cuotas')?.value)||1;const desde=parseInt(document.getElementById('m-cuota-desde')?.value)||1;const importe=parseFloat(document.getElementById('m-importe')?.value)||0;const interes=parseFloat(document.getElementById('m-interes')?.value)||0;const chip=document.getElementById('chip-cuotas-calc');if(!chip)return;if(cuotas<=1){chip.style.display='none';return;}const total=importe*(1+interes/100);const cuota=Math.round(total/cuotas*100)/100;const restantes=cuotas-desde+1;chip.style.display='block';chip.textContent=`${restantes} cuotas (${desde}→${cuotas}) · ${fmtARS(cuota)} c/u`;}
+function onDivisaMonedaChange(){const moneda=document.getElementById('m-divisa-moneda').value;const cotizInput=document.getElementById('m-divisa-cotiz');if(moneda==='USD'&&DOLAR_RATES.blue>0){cotizInput.value=Math.round(DOLAR_RATES.blue);}else if(DOLAR_RATES[moneda]>0){cotizInput.value=Math.round(DOLAR_RATES[moneda]*100)/100;}updateDivisaTotal();}
+function onDivisaTipoChange(){const tipo=document.getElementById('m-divisa-tipo').value;const cotizInput=document.getElementById('m-divisa-cotiz');const rate=DOLAR_RATES[tipo]||0;if(rate>0&&tipo!=='manual')cotizInput.value=Math.round(rate);updateDivisaTotal();}
+function updateDivisaTotal(){const cotiz=parseFloat(document.getElementById('m-divisa-cotiz')?.value)||0;const monto=parseFloat(document.getElementById('m-divisa-monto')?.value)||0;const chip=document.getElementById('chip-divisa-calc');if(cotiz>0&&monto>0){const total=Math.round(cotiz*monto*100)/100;if(chip){chip.style.display='block';chip.textContent=`${monto} × ${fmtARS(cotiz)} = ${fmtARS(total)}`;}document.getElementById('m-importe').value=total;}else if(chip)chip.style.display='none';}
 
 function saveMovimiento(){
   const concepto=document.getElementById('m-concepto').value.trim();
-  const importe =parseFloat(document.getElementById('m-importe').value)||0;
+  const importe=parseFloat(document.getElementById('m-importe').value)||0;
   if(!concepto){showToast('Completá el concepto');return;}
   if(importe<=0){showToast('Ingresá un importe válido');return;}
-  const tipo    = document.querySelector('.type-btn[class*="active"]')?.dataset.tipo||'Gasto';
-  const estado  = document.querySelector('.estado-btn[class*="active"]')?.dataset.estado||'Pagado';
-  const editingId = document.getElementById('modal-editing-id').value;
-  const esCuotas  = document.getElementById('toggle-cuotas').classList.contains('on');
-  const esFijo    = document.getElementById('toggle-fijo').classList.contains('on');
-  const cuotas    = parseInt(document.getElementById('m-cuotas').value)||1;
-  const desde     = parseInt(document.getElementById('m-cuota-desde').value)||1;
-  const interes   = parseFloat(document.getElementById('m-interes').value)||0;
-  const mesesFijo = parseInt(document.getElementById('m-meses-fijo').value)||1;
-  const billetera = document.getElementById('m-billetera').value;
-  const fecha     = document.getElementById('m-fecha').value;
-  const warn=checkCierreWarning(fecha,billetera);
-  if(warn&&!confirm(warn+'
-
-¿Continuar?'))return;
-  const base={fecha,tipo,categoria:document.getElementById('m-categoria').value,billetera,divisa:document.getElementById('m-divisa').value||'-',estado,comentarios:document.getElementById('m-comentarios').value};
-  const nuevos=[];
-  const now=Date.now();
+  const tipo=document.querySelector('.type-btn[class*="active"]')?.dataset.tipo||'Gasto';
+  const estado=document.querySelector('.estado-btn[class*="active"]')?.dataset.estado||'Pagado';
+  const editingId=document.getElementById('modal-editing-id').value;
+  const esCuotas=document.getElementById('toggle-cuotas').classList.contains('on');
+  const esFijo=document.getElementById('toggle-fijo').classList.contains('on');
+  const cuotas=parseInt(document.getElementById('m-cuotas').value)||1;
+  const desde=parseInt(document.getElementById('m-cuota-desde').value)||1;
+  const interes=parseFloat(document.getElementById('m-interes').value)||0;
+  const mesesFijo=parseInt(document.getElementById('m-meses-fijo').value)||1;
+  const billetera=document.getElementById('m-billetera').value;
+  const fecha=document.getElementById('m-fecha').value;
+  const base={fecha,tipo,categoria:document.getElementById('m-categoria').value,billetera,estado,comentarios:document.getElementById('m-comentarios').value};
+  const nuevos=[];const now=Date.now();
   if(tipo==='Transferencia'){
-    nuevos.push({...base,id:now,  concepto:concepto+' (Salida)',importe});
+    nuevos.push({...base,id:now,concepto:concepto+' (Salida)',importe});
     nuevos.push({...base,id:now+1,concepto:concepto+' (Entrada)',importe,billetera:document.getElementById('m-billetera-dest').value});
-  } else if(esFijo&&tipo==='Gasto'){
-    for(let i=0;i<mesesFijo;i++){
-      const fd=new Date(fecha+'T12:00:00');fd.setMonth(fd.getMonth()+i);
-      nuevos.push({...base,id:now+i,concepto:concepto+(mesesFijo>1?` (Fijo ${i+1}/${mesesFijo})`:''),importe,fecha:fd.toISOString().split('T')[0]});
-    }
-  } else if(esCuotas&&cuotas>1){
-    const totalAmt=importe*(1+interes/100);
-    const cuotaAmt=Math.round(totalAmt/cuotas*100)/100;
-    for(let i=desde;i<=cuotas;i++){
-      const fd=new Date(fecha+'T12:00:00');fd.setMonth(fd.getMonth()+(i-desde));
-      nuevos.push({...base,id:now+(i-desde),concepto:`${concepto} (${i}/${cuotas})`,importe:cuotaAmt,fecha:fd.toISOString().split('T')[0],cuotas,cuotaActual:i,comentarios:i===desde&&interes>0?`Interés ${interes}%`:base.comentarios});
-    }
-  } else {
-    nuevos.push({...base,id:now,concepto,importe});
-  }
-  if(editingId) userData.movimientos=(userData.movimientos||[]).filter(m=>m.id!=editingId);
+  }else if(esFijo&&tipo==='Gasto'){
+    for(let i=0;i<mesesFijo;i++){const fd=new Date(fecha+'T12:00:00');fd.setMonth(fd.getMonth()+i);nuevos.push({...base,id:now+i,concepto:concepto+(mesesFijo>1?` (Fijo ${i+1}/${mesesFijo})`:''),importe,fecha:fd.toISOString().split('T')[0]});}
+  }else if(esCuotas&&cuotas>1){
+    const totalAmt=importe*(1+interes/100);const cuotaAmt=Math.round(totalAmt/cuotas*100)/100;
+    for(let i=desde;i<=cuotas;i++){const fd=new Date(fecha+'T12:00:00');fd.setMonth(fd.getMonth()+(i-desde));nuevos.push({...base,id:now+(i-desde),concepto:`${concepto} (${i}/${cuotas})`,importe:cuotaAmt,fecha:fd.toISOString().split('T')[0],cuotas,cuotaActual:i});}
+  }else{nuevos.push({...base,id:now,concepto,importe});}
+  if(editingId)userData.movimientos=(userData.movimientos||[]).filter(m=>m.id!=editingId);
   userData.movimientos.push(...nuevos);
   document.getElementById('modal-overlay').classList.remove('open');
-  renderAll();
-  updateNotifBadge();
+  renderAll();updateNotifBadge();
   showToast('⏳ Guardando...');
-  saveToFirestore().then(()=>showToast(editingId?'✅ Actualizado':`✅ ${nuevos.length>1?nuevos.length+' movimientos guardados':'Guardado'}`)).catch(()=>showToast('⚠️ Error al guardar'));
-}
-
-// ══════════════════════════════════════════════
-//  EXPORT
-// ══════════════════════════════════════════════
-function exportCSV(){
-  const txs=getTxPeriod();
-  const header='Fecha,Tipo,Concepto,Categoría,Billetera,Importe,Divisa,Estado,Comentarios
-';
-  const rows=txs.map(t=>[t.fecha,t.tipo,`"${t.concepto}"`,t.categoria,t.billetera,t.importe,t.divisa,t.estado,`"${t.comentarios||''}"`].join(',')).join('
-');
-  const blob=new Blob([header+rows],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`flowcash_${MESES[currentPeriod.month]}_${currentPeriod.year}.csv`;a.click();URL.revokeObjectURL(url);
-  showToast('CSV exportado');
-}
-
-function exportPDF(){
-  const {jsPDF}=window.jspdf;
-  if(!jsPDF){showToast('PDF no disponible');return;}
-  const txs=getTxPeriod();
-  const periodo=MESES[currentPeriod.month]+' '+currentPeriod.year;
-  const doc=new jsPDF();
-  const ing=txs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0);
-  const gas=txs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0);
-  doc.setFontSize(20);doc.setTextColor(15,23,42);doc.text('FlowCash — '+periodo,14,20);
-  doc.setFontSize(10);doc.setTextColor(100,116,139);doc.text('Generado '+new Date().toLocaleDateString('es-AR'),14,28);
-  doc.setFontSize(12);doc.setTextColor(0);
-  doc.text('Ingresos: $'+ing.toLocaleString('es-AR'),14,42);
-  doc.text('Gastos:   $'+gas.toLocaleString('es-AR'),14,50);
-  doc.text('Balance:  $'+(ing-gas).toLocaleString('es-AR'),14,58);
-  doc.autoTable({startY:68,head:[['Fecha','Concepto','Tipo','Categoría','Billetera','Importe','Estado']],body:txs.map(t=>[t.fecha,t.concepto,t.tipo,t.categoria,t.billetera||'','$'+t.importe.toLocaleString('es-AR'),t.estado]),styles:{fontSize:8,cellPadding:2},headStyles:{fillColor:[15,23,42],textColor:255},alternateRowStyles:{fillColor:[30,41,59]}});
-  doc.save(`flowcash_${periodo.replace(' ','_')}.pdf`);
-  showToast('PDF generado');
-}
-
-async function importCSV(input){
-  const file=input.files[0];if(!file)return;
-  const text=await file.text();
-  const lines=text.split('
-').filter(l=>l.trim());
-  const sep=lines[0].includes(';')?';':',';
-  const cols=lines[0].toLowerCase().split(sep).map(h=>h.trim().replace(/"/g,''));
-  const idx={fecha:cols.findIndex(h=>h.includes('fecha')),tipo:cols.findIndex(h=>h.includes('tipo')),concepto:cols.findIndex(h=>h.includes('concepto')||h.includes('descripci')),categoria:cols.findIndex(h=>h.includes('categ')),billetera:cols.findIndex(h=>h.includes('billetera')||h.includes('cuenta')),importe:cols.findIndex(h=>h.includes('importe')||h.includes('monto')),estado:cols.findIndex(h=>h.includes('estado'))};
-  const imported=[];
-  lines.slice(1).forEach((line,i)=>{
-    if(!line.trim())return;
-    const vals=line.split(sep).map(v=>v.trim().replace(/^"|"$/g,''));
-    const imp=parseFloat((vals[idx.importe]||'0').replace(/[^0-9.-]/g,''));
-    if(!imp)return;
-    imported.push({id:Date.now()+i,fecha:vals[idx.fecha]||new Date().toISOString().split('T')[0],tipo:vals[idx.tipo]||'Gasto',concepto:vals[idx.concepto]||'Importado',categoria:vals[idx.categoria]||'Personal',billetera:vals[idx.billetera]||'Varios',importe:Math.abs(imp),divisa:'-',estado:vals[idx.estado]||'Pagado',comentarios:'Importado desde CSV'});
-  });
-  if(!imported.length){document.getElementById('csv-import-result').innerHTML='<span style="color:var(--red)">❌ Sin movimientos válidos</span>';return;}
-  if(!confirm(`¿Importar ${imported.length} movimientos?`))return;
-  userData.movimientos.push(...imported);
-  await saveToFirestore();
-  renderAll();
-  document.getElementById('csv-import-result').innerHTML=`<span style="color:var(--green)">✅ ${imported.length} importados</span>`;
-  input.value='';
-  showToast(`✅ ${imported.length} importados`);
-}
-
-// ══════════════════════════════════════════════
-//  SHARE
-// ══════════════════════════════════════════════
-async function shareAccess(){
-  const email=document.getElementById('share-email').value.trim();
-  const role =document.getElementById('share-role').value;
-  if(!email){showToast('Ingresá un email');return;}
-  try{
-    const snap=await db.collection('users').where('email','==',email).get();
-    if(snap.empty){showToast('❌ Usuario no encontrado');return;}
-    const targetUid=snap.docs[0].id;
-    if(!userData.sharedWith)userData.sharedWith={};
-    userData.sharedWith[targetUid]={email,role,since:new Date().toISOString()};
-    await db.collection('users').doc(targetUid).update({[`sharedAccess.${currentUser.uid}`]:{ownerEmail:currentUser.email,role,since:firebase.firestore.FieldValue.serverTimestamp()}});
-    await saveToFirestore();
-    document.getElementById('share-email').value='';
-    renderSharedList();
-    showToast('✅ Acceso compartido');
-  }catch(e){showToast('Error: '+e.message);}
-}
-function renderSharedList(){
-  const shared=userData.sharedWith||{};
-  const el=document.getElementById('share-list');if(!el)return;
-  const entries=Object.entries(shared);
-  if(!entries.length){el.innerHTML='';return;}
-  el.innerHTML=entries.map(([uid,info])=>`<div class="share-row">
-    <div class="share-info"><div class="share-email">${info.email}</div><div class="share-role">${info.role==='editor'?'Colaborador':'Solo lectura'}</div></div>
-    <button class="btn-danger" style="padding:5px 10px;font-size:11px" onclick="revokeShare('${uid}')">Revocar</button>
-  </div>`).join('');
-}
-async function revokeShare(uid){
-  if(!confirm('¿Revocar acceso?'))return;
-  delete userData.sharedWith[uid];
-  await db.collection('users').doc(uid).update({[`sharedAccess.${currentUser.uid}`]:firebase.firestore.FieldValue.delete()});
-  await saveToFirestore();
-  renderSharedList();
-  showToast('Acceso revocado');
+  saveToFirestore().then(()=>showToast(editingId?'✅ Actualizado':`✅ ${nuevos.length>1?nuevos.length+' guardados':'Guardado'}`));
 }
 
 // ══════════════════════════════════════════════
@@ -3981,44 +3080,27 @@ async function revokeShare(uid){
 // ══════════════════════════════════════════════
 async function loadAdminUsers(){
   try{
-    const snap=await db.collection('users').orderBy('createdAt','desc').get();
-    const users=snap.docs.map(d=>({id:d.id,...d.data()}));
+    const users=await fsList('users');
     const pending=users.filter(u=>u.status==='pending');
     const all=users.filter(u=>u.email!==ADMIN_EMAIL);
-    document.getElementById('admin-pending-list').innerHTML=pending.length
-      ?pending.map(u=>`<div class="admin-user-row">
-          <div class="admin-user-info"><div class="admin-user-name">${u.name||'Sin nombre'}</div><div class="admin-user-email">${u.email}</div></div>
-          <div class="admin-actions">
-            <button class="btn-secondary" style="font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3)" onclick="approveUser('${u.id}','${u.email}')">✓ Aprobar</button>
-            <button class="btn-danger" style="font-size:11px" onclick="rejectUser('${u.id}','${u.email}')">✕</button>
-          </div>
-        </div>`).join('')
-      :'<div style="font-size:13px;color:var(--text3);padding:12px 0">No hay usuarios pendientes ✅</div>';
-    document.getElementById('admin-all-list').innerHTML=all.length
-      ?all.map(u=>`<div class="admin-user-row">
-          <div class="admin-user-info">
-            <div class="admin-user-name">${u.name||'Sin nombre'} <span style="font-size:11px;color:var(--text3)">${u.email}</span></div>
-            <div style="margin-top:3px"><span class="badge ${u.status==='approved'?'badge-paid':'badge-pending'}">${u.status==='approved'?'Activo':'Pendiente'}</span> <span style="font-size:11px;color:var(--text3)">${(u.movimientos||[]).length} movimientos</span></div>
-          </div>
-          ${u.status==='approved'
-            ?`<button class="btn-danger" style="font-size:11px" onclick="revokeUser('${u.id}')">Revocar</button>`
-            :`<button class="btn-secondary" style="font-size:11px;color:var(--green)" onclick="approveUser('${u.id}','${u.email}')">Aprobar</button>`}
-        </div>`).join('')
-      :'<div style="font-size:13px;color:var(--text3)">Sin usuarios</div>';
+    const pl=document.getElementById('admin-pending-list');
+    if(pl)pl.innerHTML=pending.length?pending.map(u=>`<div class="admin-user-row"><div class="admin-user-info"><div class="admin-user-name">${u.name||'Sin nombre'}</div><div class="admin-user-email">${u.email}</div></div><div class="admin-actions"><button class="btn-secondary" style="font-size:11px;color:var(--green)" onclick="approveUser('${u.id}','${u.email}')">✓ Aprobar</button><button class="btn-danger" style="font-size:11px" onclick="rejectUser('${u.id}')">✕</button></div></div>`).join(''):'<div style="font-size:13px;color:var(--text3);padding:12px 0">Sin pendientes ✅</div>';
+    const al=document.getElementById('admin-all-list');
+    if(al)al.innerHTML=all.length?all.map(u=>`<div class="admin-user-row"><div class="admin-user-info"><div class="admin-user-name">${u.name||u.email} <span class="badge ${u.status==='approved'?'badge-paid':'badge-pending'}">${u.status}</span></div></div>${u.status==='approved'?`<button class="btn-danger" style="font-size:11px" onclick="revokeUser('${u.id}')">Revocar</button>`:`<button class="btn-secondary" style="font-size:11px" onclick="approveUser('${u.id}','${u.email}')">Aprobar</button>`}</div>`).join(''):'<div style="font-size:13px;color:var(--text3)">Sin usuarios</div>';
   }catch(e){console.error(e);}
 }
-async function approveUser(uid,email){await db.collection('users').doc(uid).update({status:'approved'});showToast('✅ '+email+' aprobado');loadAdminUsers();}
-async function rejectUser(uid,email){if(!confirm('¿Rechazar a '+email+'?'))return;await db.collection('users').doc(uid).delete();showToast('Rechazado');loadAdminUsers();}
-async function revokeUser(uid){if(!confirm('¿Revocar acceso?'))return;await db.collection('users').doc(uid).update({status:'pending'});showToast('Acceso revocado');loadAdminUsers();}
+async function approveUser(uid,email){await fsSet('users',uid,{status:'approved'});showToast('✅ Aprobado');loadAdminUsers();}
+async function rejectUser(uid){if(!confirm('¿Rechazar?'))return;showToast('Rechazado');loadAdminUsers();}
+async function revokeUser(uid){if(!confirm('¿Revocar?'))return;await fsSet('users',uid,{status:'pending'});showToast('Revocado');loadAdminUsers();}
 
 // ══════════════════════════════════════════════
-//  KEYBOARD SHORTCUTS
+//  KEYBOARD
 // ══════════════════════════════════════════════
 document.addEventListener('keydown', e => {
   if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
-  const ctrl = e.ctrlKey || e.metaKey;
-  if (ctrl && e.key==='n') { e.preventDefault(); openModal(); }
-  if (ctrl && e.key==='f') { e.preventDefault(); showView('buscar'); }
+  const ctrl = e.ctrlKey||e.metaKey;
+  if (ctrl&&e.key==='n') { e.preventDefault(); openModal(); }
+  if (ctrl&&e.key==='f') { e.preventDefault(); showView('buscar'); }
   if (e.key==='Escape') {
     document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
     document.querySelectorAll('.side-panel.open').forEach(p=>p.classList.remove('open'));
@@ -4027,31 +3109,24 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Global error catcher
-window.onerror = function(msg, src, line, col, err) {
-  console.error('JS Error:', msg, 'line:', line, err);
-  showToast && showToast('Error JS: ' + msg);
-};
-window.onunhandledrejection = function(e) {
-  console.error('Promise error:', e.reason);
-};
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+loadSavedTheme();
 
 // Unregister old service workers
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r=>r.unregister()));
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
 }
 
-// Verify everything loaded
-window.addEventListener('load', function() {
-  console.log('Window load complete');
-  console.log('Firebase:', typeof firebase !== 'undefined' ? 'OK' : 'MISSING');
-  console.log('auth:', typeof auth !== 'undefined' ? 'OK' : 'MISSING');  
-  console.log('doLogin:', typeof doLogin);
-  // If firebase didn't load, show error
-  if (typeof firebase === 'undefined') {
-    document.getElementById('auth-screen').innerHTML += '<div style="color:red;padding:20px;text-align:center">Error: Firebase no cargó. Verificá tu conexión.</div>';
+// Try restore session, otherwise show auth screen
+(async () => {
+  const user = fbRestoreSession();
+  if (user) {
+    await handleAuthUser(user);
   }
-});
+  // auth-screen is visible by default via CSS, nothing to do if no session
+})();
 
 </script>
 </body>
