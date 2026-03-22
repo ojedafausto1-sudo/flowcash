@@ -1578,6 +1578,16 @@ body {
               <div class="chart-box"><canvas id="chart-evo"></canvas></div>
             </div>
           </div>
+          <div class="charts-grid" style="margin-bottom:14px">
+            <div class="card">
+              <div class="card-header"><span class="card-title">Gastos por billetera</span></div>
+              <div class="chart-box"><canvas id="chart-wallet"></canvas></div>
+            </div>
+            <div class="card">
+              <div class="card-header"><span class="card-title">Balance acumulado</span></div>
+              <div class="chart-box"><canvas id="chart-balance"></canvas></div>
+            </div>
+          </div>
           <div class="card" id="compare-card" style="margin-bottom:14px">
             <div class="card-header"><span class="card-title">vs Mes anterior</span></div>
             <div class="compare-grid" id="compare-content"></div>
@@ -1680,6 +1690,16 @@ body {
           <div class="card">
             <div class="card-header"><span class="card-title">Evolución</span></div>
             <div style="overflow-x:auto"><table class="evo-table" id="wallets-table"></table></div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <div class="card-header">
+              <span class="card-title">Rendimiento anual estimado</span>
+              <span style="font-size:11px;color:var(--text3)">Si dejas tu saldo en cada billetera</span>
+            </div>
+            <div id="wallets-rendimiento"></div>
+            <div style="margin-top:14px">
+              <div class="chart-box" style="height:180px"><canvas id="chart-rendimiento"></canvas></div>
+            </div>
           </div>
         </div>
 
@@ -2380,6 +2400,7 @@ async function loadFromFirestore() {
   try {
     const d = await fsGet('users', currentUser.uid);
     if (d) {
+      userData.name           = d.name           || currentUser.email?.split('@')[0] || '';
       userData.movimientos    = d.movimientos    || [];
       userData.budgets        = d.budgets        || {};
       userData.customCats     = d.customCats     || null;
@@ -2461,9 +2482,9 @@ function launchApp() {
   document.getElementById('pending-screen').classList.remove('show');
   document.getElementById('app').style.display = 'block';
 
-  const name    = currentUser?.email?.split('@')[0] || '?';
+  const name    = userData.name || currentUser?.email?.split('@')[0] || 'Usuario';
   const email   = currentUser?.email || '';
-  const initial = name[0].toUpperCase();
+  const initial = (name[0] || 'U').toUpperCase();
 
   ['topbar-avatar','sidebar-avatar'].forEach(id => {
     const el = document.getElementById(id);
@@ -2677,6 +2698,51 @@ function renderDashboard() {
         {label:'Gastos',data:gas6,borderColor:'#f87171',backgroundColor:'rgba(248,113,113,0.08)',tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#f87171'}
       ]},
       options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},color:'#94a3b8',boxWidth:10}}},scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:10},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}},x:{ticks:{font:{size:10},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}}}}
+    });
+  }
+
+  // Gastos por billetera (bar)
+  const walletMap = {};
+  txs.filter(t=>t.tipo==='Gasto').forEach(t=>{ walletMap[t.billetera||'Otros']=(walletMap[t.billetera||'Otros']||0)+t.importe; });
+  const wLabels=Object.keys(walletMap), wVals=Object.values(walletMap);
+  const wColors=['#38bdf8','#4ade80','#fbbf24','#a78bfa','#f87171','#22d3ee'];
+  const ctx3 = document.getElementById('chart-wallet');
+  if (ctx3) {
+    if (window._chartWallet) window._chartWallet.destroy();
+    window._chartWallet = new Chart(ctx3.getContext('2d'), {
+      type:'bar',
+      data:{labels:wLabels,datasets:[{data:wVals,backgroundColor:wColors,borderRadius:6}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:9},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}},
+          x:{ticks:{font:{size:10},color:'#64748b'},grid:{display:false}}}}
+    });
+  }
+
+  // Balance acumulado (line - 12 meses)
+  const bal12Labels=[], bal12Data=[];
+  let runBal=0;
+  for (let i=11;i>=0;i--) {
+    let m=currentPeriod.month-i, y=currentPeriod.year;
+    while(m<0){m+=12;y--;}
+    const mTxs=(userData.movimientos||[]).filter(t=>{const[ty,tm]=t.fecha.split('-').map(Number);return ty===y&&tm-1===m&&t.estado==='Pagado';});
+    const ing=mTxs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0);
+    const gas=mTxs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0);
+    runBal += ing - gas;
+    bal12Labels.push(MESES[m].slice(0,3));
+    bal12Data.push(runBal);
+  }
+  const ctx4 = document.getElementById('chart-balance');
+  if (ctx4) {
+    if (window._chartBalance) window._chartBalance.destroy();
+    window._chartBalance = new Chart(ctx4.getContext('2d'), {
+      type:'line',
+      data:{labels:bal12Labels,datasets:[{label:'Balance acumulado',data:bal12Data,
+        borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,0.1)',
+        tension:0.4,fill:true,pointRadius:3,pointBackgroundColor:'#a78bfa'}]},
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{display:false}},
+        scales:{y:{ticks:{callback:v=>'$'+Math.round(v/1000)+'k',font:{size:9},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}},
+          x:{ticks:{font:{size:9},color:'#64748b'},grid:{color:'rgba(51,65,85,0.5)'}}}}
     });
   }
 
@@ -2912,7 +2978,97 @@ function renderWallets(){
   const months6=[];for(let i=5;i>=0;i--){let m=month-i,y=year;if(m<0){m+=12;y--;}months6.push({y,m});}
   const wt=document.getElementById('wallets-table');
   if(wt){const thead=`<tr>${['Billetera',...months6.map(({y,m})=>MESES[m].slice(0,3)+' '+y)].map((h,i)=>`<th>${h}</th>`).join('')}</tr>`;const rows=wallets.map(w=>`<tr><td>${w}</td>${months6.map(({y,m})=>{const b=calcWalletBalance(w,y,m);return`<td class="${b<0?'neg':'pos'}">${fmtARS(b)}</td>`;}).join('')}</tr>`);const totals=months6.map(({y,m})=>{const t=wallets.reduce((s,w)=>s+calcWalletBalance(w,y,m),0);return`<td class="${t<0?'neg':'pos'}">${fmtARS(t)}</td>`;}).join('');wt.innerHTML=`<thead>${thead}</thead><tbody>${rows.join('')}<tr><td>TOTAL</td>${totals}</tr></tbody>`;}
+  renderRendimiento();
 }
+// Tasas de rendimiento conocidas (% anual)
+const WALLET_RATES = {
+  'Mercado Pago': 37,  // Cuenta remunerada aprox
+  'BBVA': 0,
+  'Efectivo': 0,
+  'Varios': 0
+};
+
+function renderRendimiento() {
+  const wallets = getUserWallets();
+  const {year, month} = currentPeriod;
+  const el = document.getElementById('wallets-rendimiento');
+  if (!el) return;
+
+  const items = wallets.map(w => {
+    const balance = calcWalletBalance(w, year, month);
+    const tasa = WALLET_RATES[w] !== undefined ? WALLET_RATES[w] : 0;
+    const ganancia = balance > 0 ? Math.round(balance * tasa / 100) : 0;
+    const mensual  = Math.round(ganancia / 12);
+    return { w, balance, tasa, ganancia, mensual };
+  }).filter(x => x.balance > 0);
+
+  el.innerHTML = items.length ? items.map(x => `
+    <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border2)">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--text)">${x.w}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Saldo: ${fmtARS(x.balance)}</div>
+      </div>
+      <div style="text-align:center;min-width:60px">
+        <div style="font-size:11px;color:var(--text3);margin-bottom:3px">Tasa anual</div>
+        <input type="number" value="${x.tasa}" min="0" max="300" step="0.5"
+          style="width:60px;padding:4px 6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-weight:700;text-align:center;outline:none"
+          onchange="updateRate('${x.w.replace(/'/g,"\'")}', this.value)"
+          onfocus="this.select()">
+        <div style="font-size:10px;color:var(--text3);margin-top:2px">% anual</div>
+      </div>
+      <div style="text-align:right;min-width:90px">
+        <div style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--green)">+${fmtARS(x.ganancia)}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">+${fmtARS(x.mensual)}/mes</div>
+      </div>
+    </div>`).join('') + `
+    <div style="display:flex;justify-content:space-between;padding:12px 0 4px;font-weight:700">
+      <span style="font-size:13px;color:var(--text2)">Total ganancia anual estimada</span>
+      <span style="font-family:var(--mono);font-size:15px;color:var(--green)">+${fmtARS(items.reduce((s,x)=>s+x.ganancia,0))}</span>
+    </div>`
+  : '<div style="font-size:13px;color:var(--text3);padding:12px 0">Sin saldo en billeteras este período</div>';
+
+  // Rendimiento chart
+  renderRendimientoChart(items);
+}
+
+function updateRate(wallet, val) {
+  WALLET_RATES[wallet] = parseFloat(val) || 0;
+  renderRendimiento();
+}
+
+let _chartRend = null;
+function renderRendimientoChart(items) {
+  const ctx = document.getElementById('chart-rendimiento');
+  if (!ctx || !items.length) return;
+  if (_chartRend) _chartRend.destroy();
+  const colors = ['#38bdf8','#4ade80','#fbbf24','#a78bfa','#f87171'];
+  // Show monthly projection for 12 months
+  const labels = MESES.map(m => m.slice(0,3));
+  const datasets = items.filter(x=>x.tasa>0).map((x,i) => ({
+    label: x.w,
+    data: Array.from({length:12},(_,mo)=>Math.round(x.balance*(1+x.tasa/100*(mo+1)/12)-x.balance)),
+    borderColor: colors[i%colors.length],
+    backgroundColor: 'transparent',
+    tension: 0.4,
+    pointRadius: 2,
+    pointBackgroundColor: colors[i%colors.length]
+  }));
+  if (!datasets.length) { ctx.style.display='none'; return; }
+  ctx.style.display = '';
+  _chartRend = new Chart(ctx.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ font:{size:10}, color:'#94a3b8', boxWidth:10 } } },
+      scales:{
+        y:{ ticks:{ callback:v=>'+$'+Math.round(v/1000)+'k', font:{size:9}, color:'#64748b' }, grid:{color:'rgba(51,65,85,0.5)'} },
+        x:{ ticks:{ font:{size:9}, color:'#64748b' }, grid:{display:false} }
+      }
+    }
+  });
+}
+
 async function saveWalletInitial(w,v){if(!userData.walletInitials)userData.walletInitials={};userData.walletInitials[w]=parseFloat(v)||0;await saveToFirestore();renderWallets();showToast('Saldo guardado');}
 
 // ══════════════════════════════════════════════
