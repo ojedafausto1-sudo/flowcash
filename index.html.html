@@ -2230,19 +2230,34 @@ async function fsGet(col, id) {
 async function fsSet(col, id, obj) {
   if (!FB_TOKEN) throw new Error('not auth');
   const fields = fsTo(obj);
-  // Try PATCH (update), fall back to POST (create)
-  let r = await fetch(`${FS_URL}/${col}/${id}`, {
+  // PATCH with updateMask = partial update (merge behavior)
+  const mask = Object.keys(fields).map(k => `updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+  let r = await fetch(`${FS_URL}/${col}/${id}?${mask}`, {
     method: 'PATCH',
     headers: {Authorization:`Bearer ${FB_TOKEN}`, 'Content-Type':'application/json'},
     body: JSON.stringify({fields})
   });
-  if (!r.ok && r.status !== 200) {
+  if (!r.ok) {
+    // Document doesn't exist yet — create it
     r = await fetch(`${FS_URL}/${col}?documentId=${id}`, {
       method: 'POST',
       headers: {Authorization:`Bearer ${FB_TOKEN}`, 'Content-Type':'application/json'},
       body: JSON.stringify({fields})
     });
+    if (!r.ok) {
+      const err = await r.text();
+      throw new Error('fsSet failed: ' + err);
+    }
   }
+  return true;
+}
+
+async function fsDelete(col, id) {
+  if (!FB_TOKEN) throw new Error('not auth');
+  const r = await fetch(`${FS_URL}/${col}/${id}`, {
+    method: 'DELETE',
+    headers: {Authorization:`Bearer ${FB_TOKEN}`}
+  });
   return r.ok;
 }
 
@@ -3267,7 +3282,7 @@ async function loadAdminUsers(){
           </div>
           <div class="admin-actions">
             <button class="btn-secondary" style="font-size:11px;color:var(--green)" onclick="approveUser('${u.id}','${u.displayEmail}')">✓ Aprobar</button>
-            <button class="btn-danger" style="font-size:11px" onclick="rejectUser('${u.id}')">✕</button>
+            <button class="btn-danger" style="font-size:11px" onclick="rejectUser('${u.id}','${u.displayEmail}')">🗑 Rechazar</button>
           </div>
         </div>`).join('')
       : '<div style="font-size:13px;color:var(--text3);padding:12px 0">Sin pendientes ✅</div>';
@@ -3296,9 +3311,39 @@ async function loadAdminUsers(){
     }
   } catch(e) { console.error('loadAdminUsers:', e); }
 }
-async function approveUser(uid,email){await fsSet('users',uid,{status:'approved'});showToast('✅ Aprobado');loadAdminUsers();}
-async function rejectUser(uid){if(!confirm('¿Rechazar?'))return;showToast('Rechazado');loadAdminUsers();}
-async function revokeUser(uid){if(!confirm('¿Revocar?'))return;await fsSet('users',uid,{status:'pending'});showToast('Revocado');loadAdminUsers();}
+async function approveUser(uid, email) {
+  try {
+    await fsSet('users', uid, {status: 'approved'});
+    showToast('✅ ' + email + ' aprobado');
+    loadAdminUsers();
+  } catch(e) {
+    showToast('Error al aprobar: ' + e.message);
+    console.error('approveUser error:', e);
+  }
+}
+
+async function rejectUser(uid, email) {
+  if (!confirm('¿Rechazar y eliminar a ' + (email||uid) + '?\nEsta acción no se puede deshacer.')) return;
+  try {
+    await fsDelete('users', uid);
+    showToast('🗑 Usuario eliminado');
+    loadAdminUsers();
+  } catch(e) {
+    showToast('Error al eliminar: ' + e.message);
+    console.error('rejectUser error:', e);
+  }
+}
+
+async function revokeUser(uid) {
+  if (!confirm('¿Revocar acceso? El usuario quedará como pendiente.')) return;
+  try {
+    await fsSet('users', uid, {status: 'pending'});
+    showToast('Acceso revocado');
+    loadAdminUsers();
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
 
 // ══════════════════════════════════════════════
 //  KEYBOARD
