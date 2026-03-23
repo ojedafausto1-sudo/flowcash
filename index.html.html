@@ -1770,6 +1770,18 @@ body {
             </div>
             <div id="csv-import-result" style="margin-top:8px;font-size:12px;color:var(--text3)"></div>
           </div>
+
+          <!-- Backup automático -->
+          <div class="card config-section">
+            <div class="config-title" style="margin-bottom:8px">☁️ Backup automático a Google Sheets</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Cada vez que guardás un movimiento, se envía una copia automática a tu Google Sheets.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input type="url" id="backup-url-input" class="mform-input" placeholder="URL del App Web (script.google.com)" style="flex:1;min-width:200px"
+                value="">
+              <button class="btn-secondary" onclick="setSheetsBackupUrl(document.getElementById('backup-url-input').value.trim())">💾 Guardar</button>
+            </div>
+            <div id="backup-url-status" style="margin-top:6px;font-size:12px;color:var(--text3)"></div>
+          </div>
         </div>
 
         <!-- ADMIN -->
@@ -2166,6 +2178,7 @@ const FB_PROJ = 'flowcash-3d95a';
 const FS_URL  = `https://firestore.googleapis.com/v1/projects/${FB_PROJ}/databases/(default)/documents`;
 let   FB_TOKEN = null;
 let   FB_USER  = null;
+let   SHEETS_BACKUP_URL = localStorage.getItem('fc_backup_url') || '';
 
 // ── Auth ─────────────────────────────────────
 async function fbSignIn(email, password) {
@@ -2442,7 +2455,41 @@ async function saveToFirestore() {
       sharedWith:     userData.sharedWith    || {},
       email:          currentUser.email
     });
+    // Backup a Google Sheets (silencioso, no bloquea)
+    enviarBackupSheets().catch(()=>{});
   } catch(e) { console.error('saveToFirestore:', e); }
+}
+
+async function enviarBackupSheets() {
+  if (!SHEETS_BACKUP_URL || !currentUser) return;
+  try {
+    await fetch(SHEETS_BACKUP_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        action: 'backup',
+        email:  currentUser.email,
+        uid:    currentUser.uid,
+        version: '2',
+        datos: {
+          name:           userData.name || currentUser.email.split('@')[0],
+          movimientos:    userData.movimientos   || [],
+          budgets:        userData.budgets       || {},
+          customCats:     userData.customCats    || null,
+          customWallets:  userData.customWallets || null,
+          walletInitials: userData.walletInitials|| {},
+          metas:          userData.metas         || [],
+          tarjetas:       userData.tarjetas      || [],
+        }
+      })
+    });
+  } catch(e) { /* backup silencioso */ }
+}
+
+function setSheetsBackupUrl(url) {
+  SHEETS_BACKUP_URL = url;
+  localStorage.setItem('fc_backup_url', url);
+  showToast('✅ Backup a Google Sheets activado');
 }
 
 // ══════════════════════════════════════════════
@@ -3092,7 +3139,16 @@ async function saveWalletInitial(w,v){if(!userData.walletInitials)userData.walle
 // ══════════════════════════════════════════════
 //  CONFIG
 // ══════════════════════════════════════════════
-function renderConfig(){renderCats();renderWalletsConfig();renderTarjetas();renderMetas();renderSharedList();}
+function renderConfig(){
+  renderCats();renderWalletsConfig();renderTarjetas();renderMetas();renderSharedList();
+  // Pre-fill backup URL
+  const el = document.getElementById('backup-url-input');
+  if (el) {
+    el.value = SHEETS_BACKUP_URL || '';
+    const st = document.getElementById('backup-url-status');
+    if (st) st.textContent = SHEETS_BACKUP_URL ? '✅ Backup activo' : 'Sin configurar';
+  }
+}
 function renderCats(){const cats=getUserCats();const el=document.getElementById('config-cats');if(!el)return;el.innerHTML=cats.map(c=>`<span class="tag" style="border-color:${CAT_COLORS[c]||'#94a3b8'}33"><span style="color:${CAT_COLORS[c]||'#94a3b8'}">${CAT_ICONS[c]||'💸'} ${c}</span><button class="tag-edit" onclick="openAddItemModal('cat','${c.replace(/'/g,"\\'")}','${CAT_ICONS[c]||'💸'}','${CAT_COLORS[c]||'#38bdf8'}')">✏️</button><button class="tag-del" onclick="deleteItem('cat','${c.replace(/'/g,"\\'")}')">✕</button></span>`).join('');}
 function renderWalletsConfig(){const ws=getUserWallets();const el=document.getElementById('config-wallets');if(!el)return;el.innerHTML=ws.map(w=>`<span class="tag">${w}<button class="tag-edit" onclick="openAddItemModal('wallet','${w.replace(/'/g,"\\'")}','','#38bdf8')">✏️</button><button class="tag-del" onclick="deleteItem('wallet','${w.replace(/'/g,"\\'")}')">✕</button></span>`).join('');}
 function openAddItemModal(type,name,icon,color){
@@ -3162,7 +3218,111 @@ async function revokeShare(uid){if(!confirm('¿Revocar acceso?'))return;delete u
 // ── Export ──
 function exportCSV(){const txs=getTxPeriod();const header='Fecha,Tipo,Concepto,Categoría,Billetera,Importe,Estado\n';const rows=txs.map(t=>[t.fecha,t.tipo,`"${t.concepto}"`,t.categoria,t.billetera||'',t.importe,t.estado].join(',')).join('\n');const blob=new Blob([header+rows],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`flowcash_${MESES[currentPeriod.month]}_${currentPeriod.year}.csv`;a.click();URL.revokeObjectURL(url);showToast('CSV exportado');}
 function exportPDF(){if(!window.jspdf){showToast('PDF no disponible');return;}const{jsPDF}=window.jspdf;const txs=getTxPeriod();const periodo=MESES[currentPeriod.month]+' '+currentPeriod.year;const doc=new jsPDF();const ing=txs.filter(t=>t.tipo==='Ingreso').reduce((s,t)=>s+t.importe,0);const gas=txs.filter(t=>t.tipo==='Gasto').reduce((s,t)=>s+t.importe,0);doc.setFontSize(20);doc.text('FlowCash — '+periodo,14,20);doc.setFontSize(12);doc.text('Ingresos: $'+ing.toLocaleString('es-AR'),14,42);doc.text('Gastos:   $'+gas.toLocaleString('es-AR'),14,50);doc.text('Balance:  $'+(ing-gas).toLocaleString('es-AR'),14,58);doc.autoTable({startY:68,head:[['Fecha','Concepto','Tipo','Importe','Estado']],body:txs.map(t=>[t.fecha,t.concepto,t.tipo,'$'+t.importe.toLocaleString('es-AR'),t.estado]),styles:{fontSize:8}});doc.save(`flowcash_${periodo.replace(' ','_')}.pdf`);showToast('PDF generado');}
-async function importCSV(input){const file=input.files[0];if(!file)return;const text=await file.text();const lines=text.split('\n').filter(l=>l.trim());const sep=lines[0].includes(';')?';':',';const cols=lines[0].toLowerCase().split(sep).map(h=>h.trim().replace(/"/g,''));const idx={fecha:cols.findIndex(h=>h.includes('fecha')),tipo:cols.findIndex(h=>h.includes('tipo')),concepto:cols.findIndex(h=>h.includes('concepto')||h.includes('descripci')),categoria:cols.findIndex(h=>h.includes('categ')),billetera:cols.findIndex(h=>h.includes('billetera')||h.includes('cuenta')),importe:cols.findIndex(h=>h.includes('importe')||h.includes('monto')),estado:cols.findIndex(h=>h.includes('estado'))};const imported=[];lines.slice(1).forEach((line,i)=>{if(!line.trim())return;const vals=line.split(sep).map(v=>v.trim().replace(/^"|"$/g,''));const imp=parseFloat((vals[idx.importe]||'0').replace(/[^0-9.-]/g,''));if(!imp)return;imported.push({id:Date.now()+i,fecha:vals[idx.fecha]||new Date().toISOString().split('T')[0],tipo:vals[idx.tipo]||'Gasto',concepto:vals[idx.concepto]||'Importado',categoria:vals[idx.categoria]||'Personal',billetera:vals[idx.billetera]||'Varios',importe:Math.abs(imp),divisa:'-',estado:vals[idx.estado]||'Pagado',comentarios:'CSV'});});if(!imported.length){const r=document.getElementById('csv-import-result');if(r)r.innerHTML='<span style="color:var(--red)">❌ Sin datos</span>';return;}if(!confirm(`¿Importar ${imported.length} movimientos?`))return;userData.movimientos.push(...imported);await saveToFirestore();renderAll();const r=document.getElementById('csv-import-result');if(r)r.innerHTML=`<span style="color:var(--green)">✅ ${imported.length} importados</span>`;input.value='';}
+async function importCSV(input) {
+  const file = input.files[0]; if (!file) return;
+  const text = await file.text();
+  const lines = text.split('\n').filter(l => l.trim());
+  const sep   = lines[0].includes(';') ? ';' : ',';
+
+  // Parse header - normalize names
+  const rawHeaders = lines[0].split(sep).map(h => h.trim().replace(/"/g,'').toLowerCase());
+  const col = name => rawHeaders.findIndex(h => name.some(n => h.includes(n)));
+
+  const iID       = col(['id']);
+  const iFecha    = col(['fecha','date']);
+  const iTipo     = col(['tipo','type']);
+  const iConcepto = col(['concepto','descripci','description','detail']);
+  const iCat      = col(['categ','category']);
+  const iBilletera= col(['billetera origen','billetera','cuenta','account','wallet']);
+  const iImporte  = col(['importe','monto','amount']);
+  const iCuotas   = col(['cuotas info','cuotas','installment']);
+  const iDivisa   = col(['en divisa','divisa','currency']);
+  const iEstado   = col(['estado','status']);
+
+  const imported = [];
+  const now = Date.now();
+
+  lines.slice(1).forEach((line, i) => {
+    if (!line.trim()) return;
+    // Handle commas inside quoted fields
+    const vals = [];
+    let cur = '', inQ = false;
+    for (const ch of line) {
+      if (ch === '"') { inQ = !inQ; }
+      else if (ch === sep && !inQ) { vals.push(cur.trim()); cur = ''; }
+      else cur += ch;
+    }
+    vals.push(cur.trim());
+
+    const get = idx => idx >= 0 ? (vals[idx]||'').replace(/^"|"$/g,'').trim() : '';
+
+    // Parse importe
+    const impRaw = get(iImporte).replace(/\./g,'').replace(',','.').replace(/[^0-9.-]/g,'');
+    const imp    = parseFloat(impRaw);
+    if (!imp || isNaN(imp)) return;
+
+    // Parse fecha — handle DD/MM/YYYY or YYYY-MM-DD
+    let fecha = get(iFecha);
+    if (fecha.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+      const [d, m, y] = fecha.split('/');
+      fecha = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    } else if (fecha.match(/^\d{1,2}-\d{1,2}-\d{4}$/)) {
+      const [d, m, y] = fecha.split('-');
+      fecha = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+    if (!fecha) fecha = new Date().toISOString().split('T')[0];
+
+    // Parse cuotas info "X/Y"
+    const cuotasRaw  = get(iCuotas);
+    const cuotaMatch = cuotasRaw.match(/^(\d+)\/(\d+)$/);
+    const cuotaActual= cuotaMatch ? parseInt(cuotaMatch[1]) : null;
+    const cuotaTotal = cuotaMatch ? parseInt(cuotaMatch[2]) : null;
+
+    // Use original ID if present, else generate
+    const existingId = get(iID);
+    const id = existingId ? (parseInt(existingId, 16) || (now + i)) : (now + i);
+
+    const mov = {
+      id:          id,
+      fecha,
+      tipo:        get(iTipo)      || 'Gasto',
+      concepto:    get(iConcepto)  || 'Importado',
+      categoria:   get(iCat)       || 'Personal',
+      billetera:   get(iBilletera) || 'Varios',
+      importe:     Math.abs(imp),
+      divisa:      get(iDivisa)    || '-',
+      estado:      get(iEstado)    || 'Pagado',
+      comentarios: 'Importado CSV'
+    };
+    if (cuotaActual) { mov.cuotas = cuotaTotal; mov.cuotaActual = cuotaActual; }
+
+    imported.push(mov);
+  });
+
+  const resEl = document.getElementById('csv-import-result');
+  if (!imported.length) {
+    if (resEl) resEl.innerHTML = '<span style="color:var(--red)">❌ Sin movimientos válidos</span>';
+    return;
+  }
+
+  if (!confirm(`¿Importar ${imported.length} movimientos?\n\nIncluye ${imported.filter(m=>m.cuotas).length} en cuotas.`)) return;
+
+  // Avoid duplicates by ID
+  const existingIds = new Set((userData.movimientos||[]).map(m => m.id));
+  const nuevos = imported.filter(m => !existingIds.has(m.id));
+  const dupes  = imported.length - nuevos.length;
+
+  userData.movimientos = [...(userData.movimientos||[]), ...nuevos];
+  await saveToFirestore();
+  renderAll();
+
+  const msg = dupes > 0
+    ? `✅ ${nuevos.length} importados (${dupes} duplicados ignorados)`
+    : `✅ ${nuevos.length} importados`;
+  if (resEl) resEl.innerHTML = `<span style="color:var(--green)">${msg}</span>`;
+  showToast(msg);
+  input.value = '';
+}
 
 // ══════════════════════════════════════════════
 //  NOTIFICACIONES
