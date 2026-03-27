@@ -3784,20 +3784,19 @@ async function buscarPromos() {
   const el  = document.getElementById('promos-list');
   if (!el) return;
 
-  // Check cache — valid for 6 hours for same day
+  // Cache válido 6 horas para el mismo día
   const ahora = Date.now();
   if (promosCache && promosCache.dia === dia && (ahora - promosCache.timestamp) < 6*3600*1000) {
     renderPromos(promosCache.promos, dia);
     return;
   }
 
-  // Show loading
+  // Loading
   el.innerHTML = `
     <div class="card" style="text-align:center;padding:32px">
       <div style="font-size:32px;margin-bottom:12px">🔍</div>
-      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">Buscando promociones actualizadas...</div>
-      <div style="font-size:12px;color:var(--text3)">Consultando con IA las promos de hoy en los supermercados</div>
-      ${!SHEETS_BACKUP_URL ? '<div style="font-size:11px;color:var(--yellow);margin-top:8px">⚠️ Configurá el backend en Configuración → Backup para activar promos en tiempo real</div>' : ''}
+      <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">Buscando promociones...</div>
+      <div style="font-size:12px;color:var(--text3)">Consultando Carrefour, Día, Coto, Jumbo y más</div>
       <div style="margin-top:16px;width:40px;height:40px;border:3px solid rgba(56,189,248,0.2);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin:16px auto 0"></div>
     </div>`;
   document.getElementById('recomendacion-card').style.display = 'none';
@@ -3806,44 +3805,7 @@ async function buscarPromos() {
   promosLoading = true;
 
   try {
-    const fecha  = new Date().toLocaleDateString('es-AR', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
-    const diaStr = diaSuperSeleccionado === 'hoy' ? `hoy (${fecha})` : `el día ${dia}`;
-
-    const prompt = `Buscá las promociones y descuentos vigentes en supermercados de Argentina para ${diaStr}.
-
-Supermercados a consultar: Carrefour, Día, Coto, Jumbo, Disco, Vea, Walmart, La Anónima, Makro, Changomas.
-
-Para cada promoción encontrá:
-- Nombre del supermercado
-- Porcentaje de descuento
-- Medio de pago (banco + tarjeta/billetera)
-- Red de la tarjeta (Visa, Mastercard, Amex, Cabal, Naranja, etc.)
-- Tipo (credito o debito)
-- Si tiene tope de descuento en pesos
-
-Respondé ÚNICAMENTE con un JSON válido, sin texto antes ni después, con este formato exacto:
-{
-  "dia": "${dia}",
-  "fecha_consulta": "fecha de hoy",
-  "promos": [
-    {
-      "super": "Carrefour",
-      "descuento": "25%",
-      "tope": "$3000",
-      "medio": "Visa Galicia",
-      "red": "Visa",
-      "banco": "Galicia",
-      "tipo": "credito",
-      "emoji": "🟦",
-      "dias_aplica": ["lunes", "miercoles"]
-    }
-  ]
-}
-
-Si no encontrás info específica para ese día, igualmente devolvé las promos más recientes conocidas.
-Asegurate de que el JSON sea válido y completo.`;
-
-    // Use Cloudflare Worker if configured, else show static data
+    // Sin Worker → datos estáticos de Carrefour
     if (!PROMOS_WORKER_URL) {
       const promos = PROMOS_CARREFOUR[dia] || PROMOS_CARREFOUR['miercoles'];
       promosCache = {dia, promos, timestamp: Date.now()};
@@ -3851,27 +3813,29 @@ Asegurate de que el JSON sea válido y completo.`;
       return;
     }
 
-    const response = await fetch(`${PROMOS_WORKER_URL}?dia=${dia}`);
+    // Con Worker → búsqueda en tiempo real de TODOS los supers
+    const response = await fetch(PROMOS_WORKER_URL + '?dia=' + dia + '&v=' + Date.now());
     if (!response.ok) throw new Error('Error del Worker: ' + response.status);
     const data = await response.json();
-    if (!data.ok) throw new Error(data.error || 'Error obteniendo promos');
+    if (!data.ok) throw new Error(data.error || 'Error');
 
     const promos = data.promos || [];
     if (!promos.length) throw new Error('Sin promos en respuesta');
+
+    console.log('Promos recibidas:', promos.length, 'supers:', [...new Set(promos.map(p=>p.super))]);
 
     promosCache = { dia, promos, timestamp: Date.now() };
     renderPromos(promos, dia);
 
   } catch(e) {
     console.error('buscarPromos error:', e);
-    // Fallback to static data
     el.innerHTML = `
       <div class="card" style="border-color:rgba(251,191,36,0.3)">
-        <div style="font-size:13px;color:var(--yellow);font-weight:600;margin-bottom:8px">⚠️ No se pudo obtener promos en tiempo real</div>
+        <div style="font-size:13px;color:var(--yellow);font-weight:600;margin-bottom:8px">⚠️ Error buscando promos</div>
         <div style="font-size:12px;color:var(--text3);margin-bottom:12px">${e.message}</div>
         <button class="btn-secondary" onclick="promosCache=null;buscarPromos()" style="font-size:12px">🔄 Reintentar</button>
-      </div>
-      ${renderPromosFallback(dia)}`;
+      </div>`;
+    renderPromosFallback(dia);
   } finally {
     promosLoading = false;
   }
