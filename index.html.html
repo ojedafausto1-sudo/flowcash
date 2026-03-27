@@ -1820,11 +1820,21 @@ body {
             <div class="config-title" style="margin-bottom:8px">☁️ Backup automático a Google Sheets</div>
             <p style="font-size:12px;color:var(--text3);margin-bottom:12px">Cada vez que guardás un movimiento, se envía una copia automática a tu Google Sheets.</p>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-              <input type="url" id="backup-url-input" class="mform-input" placeholder="URL del App Web (script.google.com)" style="flex:1;min-width:200px"
-                value="">
+              <input type="url" id="backup-url-input" class="mform-input" placeholder="URL del App Web (script.google.com)" style="flex:1;min-width:200px" value="">
               <button class="btn-secondary" onclick="setSheetsBackupUrl(document.getElementById('backup-url-input').value.trim())">💾 Guardar</button>
             </div>
             <div id="backup-url-status" style="margin-top:6px;font-size:12px;color:var(--text3)"></div>
+          </div>
+
+          <!-- Promos Worker -->
+          <div class="card config-section">
+            <div class="config-title" style="margin-bottom:8px">🛒 Promos supermercados en tiempo real</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px">URL del Cloudflare Worker para buscar promos actualizadas con IA. Sin esto muestra los datos de Carrefour de este mes.</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input type="url" id="promos-url-input" class="mform-input" placeholder="https://xxx.workers.dev" style="flex:1;min-width:200px" value="">
+              <button class="btn-secondary" onclick="setPromosWorkerUrl(document.getElementById('promos-url-input').value.trim())">💾 Guardar</button>
+            </div>
+            <div id="promos-url-status" style="margin-top:6px;font-size:12px;color:var(--text3)"></div>
           </div>
         </div>
 
@@ -2254,7 +2264,8 @@ const FB_PROJ = 'flowcash-3d95a';
 const FS_URL  = `https://firestore.googleapis.com/v1/projects/${FB_PROJ}/databases/(default)/documents`;
 let   FB_TOKEN = null;
 let   FB_USER  = null;
-let   SHEETS_BACKUP_URL = localStorage.getItem('fc_backup_url') || '';
+let   SHEETS_BACKUP_URL  = localStorage.getItem('fc_backup_url') || '';
+let   PROMOS_WORKER_URL  = localStorage.getItem('fc_promos_url') || '';
 
 // ── Auth ─────────────────────────────────────
 async function fbSignIn(email, password) {
@@ -2566,6 +2577,15 @@ function setSheetsBackupUrl(url) {
   SHEETS_BACKUP_URL = url;
   localStorage.setItem('fc_backup_url', url);
   showToast('✅ Backup a Google Sheets activado');
+}
+
+function setPromosWorkerUrl(url) {
+  PROMOS_WORKER_URL = url;
+  localStorage.setItem('fc_promos_url', url);
+  const st = document.getElementById('promos-url-status');
+  if (st) st.textContent = url ? '✅ Worker configurado — promos en tiempo real activas' : 'Sin configurar';
+  showToast('✅ Worker de promos guardado');
+  promosCache = null; // invalidate cache
 }
 
 // ══════════════════════════════════════════════
@@ -3218,12 +3238,17 @@ async function saveWalletInitial(w,v){if(!userData.walletInitials)userData.walle
 // ══════════════════════════════════════════════
 function renderConfig(){
   renderCats();renderWalletsConfig();renderTarjetas();renderMetas();renderSharedList();
-  // Pre-fill backup URL
   const el = document.getElementById('backup-url-input');
   if (el) {
     el.value = SHEETS_BACKUP_URL || '';
     const st = document.getElementById('backup-url-status');
     if (st) st.textContent = SHEETS_BACKUP_URL ? '✅ Backup activo' : 'Sin configurar';
+  }
+  const el2 = document.getElementById('promos-url-input');
+  if (el2) {
+    el2.value = PROMOS_WORKER_URL || '';
+    const st2 = document.getElementById('promos-url-status');
+    if (st2) st2.textContent = PROMOS_WORKER_URL ? '✅ Worker configurado — promos en tiempo real activas' : 'Sin configurar (mostrando datos Carrefour Marzo 2026)';
   }
 }
 function renderCats(){const cats=getUserCats();const el=document.getElementById('config-cats');if(!el)return;el.innerHTML=cats.map(c=>`<span class="tag" style="border-color:${CAT_COLORS[c]||'#94a3b8'}33"><span style="color:${CAT_COLORS[c]||'#94a3b8'}">${CAT_ICONS[c]||'💸'} ${c}</span><button class="tag-edit" onclick="openAddItemModal('cat','${c.replace(/'/g,"\\'")}','${CAT_ICONS[c]||'💸'}','${CAT_COLORS[c]||'#38bdf8'}')">✏️</button><button class="tag-del" onclick="deleteItem('cat','${c.replace(/'/g,"\\'")}')">✕</button></span>`).join('');}
@@ -3818,26 +3843,22 @@ Respondé ÚNICAMENTE con un JSON válido, sin texto antes ni después, con este
 Si no encontrás info específica para ese día, igualmente devolvé las promos más recientes conocidas.
 Asegurate de que el JSON sea válido y completo.`;
 
-    // Use GAS proxy to avoid CORS (GAS calls Claude server-side)
-    if (!SHEETS_BACKUP_URL) {
-      throw new Error('Configurá la URL del backend en Configuración → Backup automático para usar promos en tiempo real');
+    // Use Cloudflare Worker if configured, else show static data
+    if (!PROMOS_WORKER_URL) {
+      const promos = PROMOS_CARREFOUR[dia] || PROMOS_CARREFOUR['miercoles'];
+      promosCache = {dia, promos, timestamp: Date.now()};
+      renderPromos(promos, dia);
+      return;
     }
 
-    const response = await fetch(SHEETS_BACKUP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'promos', dia })
-    });
-
-    if (!response.ok) throw new Error('Error del servidor: ' + response.status);
+    const response = await fetch(`${PROMOS_WORKER_URL}?dia=${dia}`);
+    if (!response.ok) throw new Error('Error del Worker: ' + response.status);
     const data = await response.json();
-
     if (!data.ok) throw new Error(data.error || 'Error obteniendo promos');
 
     const promos = data.promos || [];
     if (!promos.length) throw new Error('Sin promos en respuesta');
 
-    // Cache result
     promosCache = { dia, promos, timestamp: Date.now() };
     renderPromos(promos, dia);
 
@@ -3907,49 +3928,91 @@ function renderPromos(promos, dia) {
     </div>` +
     Object.entries(porSuper).map(([super_, promosList]) => {
       const tieneMatch = promosList.some(p => p.match);
-      return `<div class="card" style="margin-bottom:10px;${tieneMatch?'border-color:rgba(74,222,128,0.3)':''}">
-        <div class="card-header" style="margin-bottom:10px">
-          <span style="font-size:15px;font-weight:800;color:var(--text)">${promosList[0].emoji||'🛒'} ${super_}</span>
-          ${tieneMatch ? '<span class="badge badge-paid" style="font-size:10px">✓ Tenés tarjeta</span>' : ''}
+      return `<div style="margin-bottom:16px">
+        <!-- Super header -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:0 2px">
+          <span style="font-size:22px">${promosList[0].emoji||'🛒'}</span>
+          <span style="font-size:17px;font-weight:800;color:var(--text);letter-spacing:-0.4px">${super_}</span>
+          ${tieneMatch?'<span class="badge badge-paid" style="font-size:10px;margin-left:4px">✓ Tenés tarjeta</span>':''}
         </div>
+        <!-- Promo cards like PDF -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
         ${promosList.map(p => `
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border2)">
-            <div>
-              <div style="font-size:13px;font-weight:600;color:var(--text)">${p.medio}</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:2px">${p.red||''} · ${p.tipo==='debito'?'Débito':'Crédito'} · ${p.banco||''}${p.tope?` · Tope: ${p.tope}`:''}</div>
+          <div style="
+            background:${p.match?'rgba(74,222,128,0.07)':'var(--surface)'};
+            border:${p.match?'2px solid rgba(74,222,128,0.4)':'1px solid var(--border)'};
+            border-radius:12px;padding:14px;position:relative;overflow:hidden">
+            <!-- Top accent bar -->
+            <div style="position:absolute;top:0;left:0;right:0;height:3px;background:${p.match?'var(--green)':p.tipo==='debito'?'var(--accent)':'var(--purple)'}"></div>
+            <!-- Discount big number like PDF -->
+            <div style="font-family:var(--mono);font-size:32px;font-weight:900;color:${p.match?'var(--green)':'var(--text)'};line-height:1;margin:8px 0 4px">${p.descuento}</div>
+            <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">de descuento</div>
+            <!-- Medio -->
+            <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px">${p.medio}</div>
+            <!-- Tags -->
+            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:8px">
+              <span style="background:var(--surface2);border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--text3)">${p.tipo==='debito'?'🏧 Débito':'💳 Crédito'}</span>
+              ${p.tope&&p.tope!=='Sin tope'?
+                `<span style="background:rgba(251,191,36,0.1);border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--yellow)">Tope ${p.tope}</span>`
+                :`<span style="background:rgba(74,222,128,0.1);border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--green)">¡Sin tope!</span>`}
+              ${p.match?'<span style="background:rgba(74,222,128,0.15);border-radius:4px;padding:2px 6px;font-size:10px;font-weight:700;color:var(--green)">✓ Tu tarjeta</span>':''}
             </div>
-            <div style="text-align:right">
-              <div style="font-family:var(--mono);font-size:20px;font-weight:800;color:${p.match?'var(--green)':'var(--text2)'}">${p.descuento}</div>
-              ${p.match ? '<div style="font-size:10px;color:var(--green);font-weight:700">✓ Tu tarjeta</div>' : ''}
-            </div>
+            <!-- Detail -->
+            ${p.detalle?`<div style="font-size:10px;color:var(--text3);line-height:1.4;border-top:1px solid var(--border);padding-top:6px;margin-top:2px">${p.detalle}</div>`:''}
           </div>`).join('')}
+        </div>
       </div>`;
     }).join('');
 }
 
-function renderPromosFallback(dia) {
-  // Minimal static fallback
-  const fallback = {
-    lunes:     [{super:'Carrefour',descuento:'15%',medio:'Visa Galicia',red:'Visa',banco:'Galicia',tipo:'credito',emoji:'🟦'},{super:'Día',descuento:'15%',medio:'Mastercard Santander',red:'Mastercard',banco:'Santander',tipo:'credito',emoji:'🔴'}],
-    martes:    [{super:'Carrefour',descuento:'20%',medio:'Mastercard Santander',red:'Mastercard',banco:'Santander',tipo:'credito',emoji:'🟦'},{super:'Coto',descuento:'15%',medio:'Cabal',red:'Cabal',banco:'Cabal',tipo:'credito',emoji:'🟠'}],
-    miercoles: [{super:'Carrefour',descuento:'25%',medio:'Visa BBVA',red:'Visa',banco:'BBVA',tipo:'credito',emoji:'🟦'},{super:'Día',descuento:'25%',medio:'Visa Supervielle',red:'Visa',banco:'Supervielle',tipo:'credito',emoji:'🔴'}],
-    jueves:    [{super:'Coto',descuento:'20%',medio:'Mastercard Santander',red:'Mastercard',banco:'Santander',tipo:'credito',emoji:'🟠'},{super:'Día',descuento:'15%',medio:'Visa BBVA',red:'Visa',banco:'BBVA',tipo:'credito',emoji:'🔴'}],
-    viernes:   [{super:'Carrefour',descuento:'20%',medio:'Visa Galicia',red:'Visa',banco:'Galicia',tipo:'credito',emoji:'🟦'},{super:'Jumbo',descuento:'25%',medio:'Visa BBVA',red:'Visa',banco:'BBVA',tipo:'credito',emoji:'🟡'}],
-    sabado:    [{super:'Walmart',descuento:'25%',medio:'Visa Galicia',red:'Visa',banco:'Galicia',tipo:'credito',emoji:'🔵'},{super:'Coto',descuento:'20%',medio:'Visa BBVA',red:'Visa',banco:'BBVA',tipo:'debito',emoji:'🟠'}],
-    domingo:   [{super:'Jumbo',descuento:'20%',medio:'Visa BBVA',red:'Visa',banco:'BBVA',tipo:'credito',emoji:'🟡'},{super:'Disco/Vea',descuento:'25%',medio:'Mastercard Santander',red:'Mastercard',banco:'Santander',tipo:'credito',emoji:'🟢'}],
-  };
-  const promos = fallback[dia] || fallback['miercoles'];
-  promosCache = {dia, promos, timestamp: Date.now() - 5*3600*1000}; // expire soon
-  return `<div style="font-size:11px;color:var(--text3);margin-bottom:8px">Mostrando datos de respaldo (sin conexión a IA):</div>` +
-    promos.map(p => `
-      <div class="card" style="margin-bottom:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div><div style="font-weight:700">${p.emoji} ${p.super}</div><div style="font-size:12px;color:var(--text3)">${p.medio} · ${p.tipo==='debito'?'Débito':'Crédito'}</div></div>
-          <div style="font-family:var(--mono);font-size:20px;font-weight:800;color:var(--text2)">${p.descuento}</div>
-        </div>
-      </div>`).join('');
-}
+// ── Promos reales Carrefour — PDF oficial Marzo 2026 ─────────
+const PROMOS_CARREFOUR = {
+  lunes: [
+    {super:'Carrefour',descuento:'15%',medio:'Club La Nación',red:'Otra',banco:'La Nación',tipo:'credito',tope:'Sin tope',emoji:'🟦',detalle:'Presentando DNI · No incluye electro ni carnicería'},
+    {super:'Carrefour',descuento:'10%',medio:'Mi Carrefour / ANSES',red:'Otra',banco:'Carrefour Banco',tipo:'debito',tope:'$35.000/mes',emoji:'🟦',detalle:'Mayores de 60 años o beneficiarios ANSES'},
+    {super:'Carrefour',descuento:'4 CSI',medio:'Naranja X',red:'Naranja',banco:'Naranja',tipo:'credito',tope:'',emoji:'🟦',detalle:'4 cuotas sin interés · Todos los días · AMBA, Córdoba, Mendoza, San Luis y Resistencia'},
+    {super:'Carrefour',descuento:'3 CSI',medio:'Mercado Pago',red:'Otra',banco:'Mercado Pago',tipo:'debito',tope:'',emoji:'🟦',detalle:'3 cuotas sin interés · Lunes y miércoles'},
+    {super:'Carrefour',descuento:'5%',medio:'Visa / Mastercard Jubilados',red:'Visa/MC',banco:'Varios',tipo:'credito',tope:'',emoji:'🟦',detalle:'Lunes a viernes · Solo jubilados y pensionados'},
+  ],
+  martes: [
+    {super:'Carrefour',descuento:'20%',medio:'Carrefour Banco Crédito',red:'Mastercard',banco:'Carrefour Banco',tipo:'credito',tope:'Sin tope',emoji:'🟦',detalle:'En el acto · Sin tope'},
+    {super:'Carrefour',descuento:'5%',medio:'Visa / Mastercard Jubilados',red:'Visa/MC',banco:'Varios',tipo:'credito',tope:'',emoji:'🟦',detalle:'Solo jubilados y pensionados'},
+  ],
+  miercoles: [
+    {super:'Carrefour',descuento:'30%',medio:'BNA+ MODO',red:'Visa/MC',banco:'Banco Nación',tipo:'credito',tope:'$12.000/semana',emoji:'🟦',detalle:'Con tarjetas de crédito Visa y Mastercard · No incluye electro ni carnicería'},
+    {super:'Carrefour',descuento:'20%',medio:'Banco Patagonia Visa',red:'Visa',banco:'Banco Patagonia',tipo:'debito',tope:'$12.500/mes',emoji:'🟦',detalle:'Débito y crédito Visa · Clientes Plan Sueldo'},
+    {super:'Carrefour',descuento:'25%',medio:'Banco Patagonia Plan Sueldo Plus',red:'Visa',banco:'Banco Patagonia',tipo:'credito',tope:'$15.000/mes',emoji:'🟦',detalle:'Exclusivo clientes Plan Sueldo Plus'},
+    {super:'Carrefour',descuento:'35%',medio:'Banco Patagonia Plan Sueldo Singular',red:'Visa',banco:'Banco Patagonia',tipo:'credito',tope:'$20.000/mes',emoji:'🟦',detalle:'Exclusivo clientes Plan Sueldo Singular'},
+    {super:'Carrefour',descuento:'10%',medio:'Cuenta DNI',red:'Otra',banco:'Banco Provincia',tipo:'debito',tope:'Sin tope',emoji:'🟦',detalle:'Acumulable con todas las promos · Sin tope · No incluye carnicería ni pescadería fresca'},
+    {super:'Carrefour',descuento:'3 CSI',medio:'Mercado Pago',red:'Otra',banco:'Mercado Pago',tipo:'debito',tope:'',emoji:'🟦',detalle:'3 cuotas sin interés · Lunes y miércoles'},
+  ],
+  jueves: [
+    {super:'Carrefour',descuento:'15%',medio:'Mercado Pago',red:'Otra',banco:'Mercado Pago',tipo:'debito',tope:'Sin tope',emoji:'🟦',detalle:'Exclusivo con dinero en cuenta · Acumulable con todas las promos · Sin tope'},
+    {super:'Carrefour',descuento:'3 CSI',medio:'Galicia Visa / Mastercard',red:'Visa/MC',banco:'Galicia',tipo:'credito',tope:'',emoji:'🟦',detalle:'Jueves a domingos · Alimentos secos, congelados, lácteos, fiambres, bebidas, limpieza y perfumería · No incluye Electro, Bazar ni Textil'},
+    {super:'Carrefour',descuento:'5%',medio:'Visa / Mastercard Jubilados',red:'Visa/MC',banco:'Varios',tipo:'credito',tope:'',emoji:'🟦',detalle:'Solo jubilados y pensionados'},
+  ],
+  viernes: [
+    {super:'Carrefour',descuento:'15%',medio:'Carrefour Banco Cuenta Digital',red:'Mastercard',banco:'Carrefour Banco',tipo:'debito',tope:'Sin tope',emoji:'🟦',detalle:'Acumulable con todas las promos · Sin tope'},
+    {super:'Carrefour',descuento:'3 CSI',medio:'Galicia Visa / Mastercard',red:'Visa/MC',banco:'Galicia',tipo:'credito',tope:'',emoji:'🟦',detalle:'Jueves a domingos · Alimentos, limpieza y perfumería'},
+    {super:'Carrefour',descuento:'5%',medio:'Visa / Mastercard Jubilados',red:'Visa/MC',banco:'Varios',tipo:'credito',tope:'',emoji:'🟦',detalle:'Solo jubilados y pensionados'},
+  ],
+  sabado: [
+    {super:'Carrefour',descuento:'10%',medio:'QR todas las billeteras virtuales',red:'Otra',banco:'Todas las billeteras',tipo:'debito',tope:'Sin tope',emoji:'🟦',detalle:'Mercado Pago, Cuenta DNI, MODO, NaranjaX, Ualá, BNA+, Personal Pay, Prex y más · No incluye electro'},
+    {super:'Carrefour',descuento:'15%',medio:'Mercado Pago (beneficiarios ANSES)',red:'Otra',banco:'Mercado Pago',tipo:'debito',tope:'$20.000/mes',emoji:'🟦',detalle:'Si cobrás ANSES en Mercado Pago · Acumulable · Tope $20.000 mensual'},
+    {super:'Carrefour',descuento:'3 CSI',medio:'Galicia Visa / Mastercard',red:'Visa/MC',banco:'Galicia',tipo:'credito',tope:'',emoji:'🟦',detalle:'Jueves a domingos · Alimentos, limpieza y perfumería'},
+  ],
+  domingo: [
+    {super:'Carrefour',descuento:'10%',medio:'Carrefour Banco Cuenta Digital',red:'Mastercard',banco:'Carrefour Banco',tipo:'debito',tope:'Sin tope',emoji:'🟦',detalle:'Sábado y domingo · Acumulable con todas las promos'},
+    {super:'Carrefour',descuento:'3 CSI',medio:'Carrefour Banco Crédito',red:'Mastercard',banco:'Carrefour Banco',tipo:'credito',tope:'Sin tope',emoji:'🟦',detalle:'Jueves a domingos · En toda tu compra'},
+    {super:'Carrefour',descuento:'15%',medio:'Mercado Pago (beneficiarios ANSES)',red:'Otra',banco:'Mercado Pago',tipo:'debito',tope:'$20.000/mes',emoji:'🟦',detalle:'Si cobrás ANSES en Mercado Pago · Sábados y domingos'},
+  ],
+};
 
+function renderPromosFallback(dia) {
+  const promos = PROMOS_CARREFOUR[dia] || PROMOS_CARREFOUR['miercoles'];
+  promosCache = {dia, promos, timestamp: Date.now()};
+  renderPromos(promos, dia);
+}
 
 //  INIT
 // ══════════════════════════════════════════════
