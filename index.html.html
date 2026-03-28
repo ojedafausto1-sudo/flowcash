@@ -1721,7 +1721,7 @@ body {
           </div>
 
           <!-- Día de la semana -->
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px" id="dias-chips">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" id="dias-chips">
             <button class="filter-chip active" data-dia="hoy" onclick="setDiaPromo('hoy',this)">📅 Hoy</button>
             <button class="filter-chip" data-dia="lunes" onclick="setDiaPromo('lunes',this)">Lunes</button>
             <button class="filter-chip" data-dia="martes" onclick="setDiaPromo('martes',this)">Martes</button>
@@ -1730,6 +1730,21 @@ body {
             <button class="filter-chip" data-dia="viernes" onclick="setDiaPromo('viernes',this)">Viernes</button>
             <button class="filter-chip" data-dia="sabado" onclick="setDiaPromo('sabado',this)">Sábado</button>
             <button class="filter-chip" data-dia="domingo" onclick="setDiaPromo('domingo',this)">Domingo</button>
+          </div>
+
+          <!-- Filtro por supermercado -->
+          <div style="margin-bottom:14px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--text3);margin-bottom:8px">Filtrar por supermercado</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap" id="super-chips">
+              <button class="filter-chip active" data-super="todos" onclick="setSuperFiltro('todos',this)">🛒 Todos</button>
+              <button class="filter-chip" data-super="Carrefour" onclick="setSuperFiltro('Carrefour',this)">🟦 Carrefour</button>
+              <button class="filter-chip" data-super="Día" onclick="setSuperFiltro('Día',this)">🔴 Día</button>
+              <button class="filter-chip" data-super="Coto" onclick="setSuperFiltro('Coto',this)">🟠 Coto</button>
+              <button class="filter-chip" data-super="Jumbo" onclick="setSuperFiltro('Jumbo',this)">🟡 Jumbo</button>
+              <button class="filter-chip" data-super="Disco / Vea" onclick="setSuperFiltro('Disco / Vea',this)">🟢 Disco/Vea</button>
+              <button class="filter-chip" data-super="La Anónima" onclick="setSuperFiltro('La Anónima',this)">🟣 La Anónima</button>
+              <button class="filter-chip" data-super="Walmart/Changomas" onclick="setSuperFiltro('Walmart/Changomas',this)">🔵 Walmart</button>
+            </div>
           </div>
 
           <!-- Recomendación IA -->
@@ -3747,7 +3762,8 @@ async function revokeUser(uid, email) {
 // ── SUPERMERCADOS — Promos dinámicas via Claude AI ──────────────
 const DIAS_NOMBRES = ['domingo','lunes','martes','miercoles','jueves','viernes','sabado'];
 let diaSuperSeleccionado = 'hoy';
-let promosCache = null;       // {dia, promos[], timestamp}
+let superFiltroSeleccionado = 'todos';
+let promosCache = null;
 let promosLoading = false;
 
 function getDiaActual() {
@@ -3760,7 +3776,18 @@ function setDiaPromo(dia, el) {
   diaSuperSeleccionado = dia;
   document.querySelectorAll('#dias-chips .filter-chip').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
+  promosCache = null; // force refresh when day changes
   buscarPromos();
+}
+
+function setSuperFiltro(super_, el) {
+  superFiltroSeleccionado = super_;
+  document.querySelectorAll('#super-chips .filter-chip').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  // Re-render with current cache filtered
+  if (promosCache) {
+    renderPromos(promosCache.promos, promosCache.dia);
+  }
 }
 
 function renderMisTarjetasChips() {
@@ -3881,13 +3908,25 @@ function renderPromos(promos, dia) {
     }
   }
 
+  // Apply super filter
+  const promosFiltradas = superFiltroSeleccionado === 'todos'
+    ? promosConMatch
+    : promosConMatch.filter(p => p.super === superFiltroSeleccionado ||
+        p.super.toLowerCase().includes(superFiltroSeleccionado.toLowerCase()));
+
   // Group by super
   const porSuper = {};
-  promosConMatch.forEach(p => { if(!porSuper[p.super])porSuper[p.super]=[]; porSuper[p.super].push(p); });
+  promosFiltradas.forEach(p => { if(!porSuper[p.super])porSuper[p.super]=[]; porSuper[p.super].push(p); });
 
+  if (!Object.keys(porSuper).length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">🛒</div><div class="empty-text">Sin promos para este supermercado hoy</div></div>';
+    return;
+  }
+
+  const supersEncontrados = [...new Set(promos.map(p => p.super))];
   el.innerHTML = `
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;display:flex;justify-content:space-between">
-      <span>📡 Promos actualizadas en tiempo real · ${new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+      <span>📡 ${supersEncontrados.length} supermercados · ${promos.length} promos · ${new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</span>
       <button class="link-btn" onclick="promosCache=null;buscarPromos()">↺ Actualizar</button>
     </div>` +
     Object.entries(porSuper).map(([super_, promosList]) => {
