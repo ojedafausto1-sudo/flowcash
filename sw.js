@@ -18,12 +18,22 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
-// Activate — clean old caches
+// Message from app
+self.addEventListener('message', event => {
+  if (event.data === 'skipWaiting') self.skipWaiting();
+});
+
+// Activate — clean old caches + notify update
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    )
+    ).then(() => {
+      // Notify all clients there's an update
+      return self.clients.matchAll().then(clients => {
+        clients.forEach(client => client.postMessage({type: 'UPDATE_AVAILABLE'}));
+      });
+    })
   );
   self.clients.claim();
 });
