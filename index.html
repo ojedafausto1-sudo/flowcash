@@ -13,6 +13,7 @@
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <title>FlowCash</title>
+<script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -1476,6 +1477,9 @@ body {
           <input type="password" id="login-pass" class="form-input" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
         </div>
         <button class="btn-auth" id="login-btn" onclick="doLogin()">Ingresar</button>
+        <div style="text-align:center;margin-top:10px">
+          <button onclick="forgotPassword()" style="background:none;border:none;color:var(--text3);font-size:12px;cursor:pointer;text-decoration:underline">¿Olvidaste tu contraseña?</button>
+        </div>
       <div id="login-error" style="margin-top:10px;font-size:12px;color:#f87171;text-align:center"></div>
       </div>
       <div id="tab-register" style="display:none">
@@ -1892,6 +1896,17 @@ body {
               <button class="btn-secondary" onclick="setSheetsBackupUrl(document.getElementById('backup-url-input').value.trim())">💾 Guardar</button>
             </div>
             <div id="backup-url-status" style="margin-top:6px;font-size:12px;color:var(--text3)"></div>
+          </div>
+
+          <!-- Notificaciones OneSignal -->
+          <div class="card config-section">
+            <div class="config-title" style="margin-bottom:8px">🔔 Notificaciones push</div>
+            <p style="font-size:12px;color:var(--text3);margin-bottom:12px">App ID de OneSignal para recibir notificaciones en el celu. Gratis en onesignal.com</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input type="text" id="onesignal-id-input" class="mform-input" placeholder="App ID de OneSignal" style="flex:1;min-width:200px" value="">
+              <button class="btn-secondary" onclick="saveOneSignalId()">💾 Guardar</button>
+            </div>
+            <div id="onesignal-status" style="margin-top:6px;font-size:12px;color:var(--text3)"></div>
           </div>
 
           <!-- Promos Worker -->
@@ -2528,6 +2543,32 @@ function switchTab(t) {
   document.getElementById('tab-register').style.display = t==='register' ? '' : 'none';
 }
 
+async function forgotPassword() {
+  const email = document.getElementById('login-email').value.trim();
+  if (!email) {
+    const errEl = document.getElementById('login-error');
+    if (errEl) errEl.textContent = 'Ingresá tu email primero';
+    return;
+  }
+  try {
+    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${FB_KEY}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({requestType: 'PASSWORD_RESET', email})
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error?.message || 'Error');
+    const errEl = document.getElementById('login-error');
+    if (errEl) {
+      errEl.style.color = '#4ade80';
+      errEl.textContent = '✅ Te mandamos un email para recuperar tu contraseña';
+    }
+  } catch(e) {
+    const errEl = document.getElementById('login-error');
+    if (errEl) errEl.textContent = '❌ ' + (e.message === 'EMAIL_NOT_FOUND' ? 'Email no registrado' : e.message);
+  }
+}
+
 async function doLogin() {
   const errEl = document.getElementById('login-error');
   if (errEl) errEl.textContent = '';
@@ -2648,6 +2689,15 @@ function setSheetsBackupUrl(url) {
   SHEETS_BACKUP_URL = url;
   localStorage.setItem('fc_backup_url', url);
   showToast('✅ Backup a Google Sheets activado');
+}
+
+function saveOneSignalId() {
+  const id = document.getElementById('onesignal-id-input').value.trim();
+  localStorage.setItem('fc_onesignal_id', id);
+  const st = document.getElementById('onesignal-status');
+  if (st) st.textContent = id ? '✅ OneSignal configurado' : 'Sin configurar';
+  if (id) initOneSignal();
+  showToast('🔔 Notificaciones guardadas');
 }
 
 function setPromosWorkerUrl(url) {
@@ -3013,7 +3063,12 @@ function buildTxHTML(tx, selectable) {
     <div class="tx-icon" style="background:${txIconBg(tx)}">${txIcon(tx)}</div>
     <div class="tx-info">
       <div class="tx-name">${tx.concepto}</div>
-      <div class="tx-meta"><span>${tx.categoria}</span>·<span>${tx.billetera||''}</span>·<span>${tx.fecha}</span><span class="badge ${tx.estado==='Pagado'?'badge-paid':'badge-pending'}">${tx.estado}</span>${tx.cuotas>1?`<span style="color:var(--accent);font-size:10px;font-weight:700">💳${tx.cuotaActual}/${tx.cuotas}</span>`:''}</div>
+      <div class="tx-meta"><span>${tx.categoria}</span>·<span>${tx.billetera||''}</span>·<span>${tx.fecha}</span><span class="badge ${tx.estado==='Pagado'?'badge-paid':'badge-pending'}">${tx.estado}</span>${tx.vencimiento && tx.estado==='Pendiente' ? (() => {
+    const diff = Math.ceil((new Date(tx.vencimiento) - new Date()) / (1000*60*60*24));
+    const color = diff < 0 ? 'var(--red)' : diff <= 3 ? 'var(--yellow)' : 'var(--text3)';
+    const label = diff < 0 ? `Venció hace ${Math.abs(diff)}d` : diff === 0 ? 'Vence hoy' : `Vence en ${diff}d`;
+    return `<span style="font-size:10px;color:${color};font-weight:700;margin-left:4px">⏰ ${label}</span>`;
+  })() : ''}${tx.cuotas>1?`<span style="color:var(--accent);font-size:10px;font-weight:700">💳${tx.cuotaActual}/${tx.cuotas}</span>`:''}</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${payBtn}<span class="tx-amount ${txAmtClass(tx)}">${sign}${fmtARS(tx.importe)}</span></div>
   </div>`;
@@ -3316,6 +3371,12 @@ function renderConfig(){
     el.value = SHEETS_BACKUP_URL || '';
     const st = document.getElementById('backup-url-status');
     if (st) st.textContent = SHEETS_BACKUP_URL ? '✅ Backup activo' : 'Sin configurar';
+  }
+  const elO = document.getElementById('onesignal-id-input');
+  if (elO) {
+    elO.value = localStorage.getItem('fc_onesignal_id') || '';
+    const stO = document.getElementById('onesignal-status');
+    if (stO) stO.textContent = elO.value ? '✅ OneSignal configurado' : 'Sin configurar';
   }
   const el2 = document.getElementById('promos-url-input');
   if (el2) {
@@ -3656,7 +3717,13 @@ function openModal(){
 }
 function closeModalOutside(e){if(e.target===document.getElementById('modal-overlay'))document.getElementById('modal-overlay').classList.remove('open');}
 function setTipo(tipo,el){document.querySelectorAll('.type-btn').forEach(b=>b.className='type-btn');if(el)el.className=`type-btn active-${tipo.toLowerCase()}`;document.getElementById('m-sec-wallet-dest').style.display=tipo==='Transferencia'?'':'none';}
-function setEstado(estado,el){document.querySelectorAll('.estado-btn').forEach(b=>b.className='estado-btn');if(el)el.className=`estado-btn active-${estado.toLowerCase()}`;}
+function setEstado(estado,el){
+  document.querySelectorAll('.estado-btn').forEach(b=>b.className='estado-btn');
+  if(el) el.className=`estado-btn active-${estado.toLowerCase()}`;
+  currentEstado = estado;
+  const vg = document.getElementById('vencimiento-group');
+  if (vg) vg.style.display = estado==='Pendiente' ? '' : 'none';
+}
 function toggleCuotasModal(){
   const btn=document.getElementById('toggle-cuotas');
   const on=btn.classList.toggle('on');
@@ -3697,7 +3764,10 @@ function saveMovimiento(){
   const billetera=document.getElementById('m-billetera').value;
   const fecha=document.getElementById('m-fecha').value;
   const tarjetaId=document.getElementById('m-tarjeta-cuota')?.value||'';
-  const base={fecha,tipo,categoria:document.getElementById('m-categoria').value,billetera,estado,comentarios:document.getElementById('m-comentarios').value,tarjeta:tarjetaId||undefined};
+  const vencimientoVal = document.getElementById('m-vencimiento')?.value || '';
+  const base={fecha,tipo,categoria:document.getElementById('m-categoria').value,billetera,estado,
+    vencimiento: estado==='Pendiente' && vencimientoVal ? vencimientoVal : undefined,
+    comentarios:document.getElementById('m-comentarios').value,tarjeta:tarjetaId||undefined};
   const nuevos=[];const now=Date.now();
   if(tipo==='Transferencia'){
     nuevos.push({...base,id:now,concepto:concepto+' (Salida)',importe});
@@ -4235,13 +4305,223 @@ function calcularDivisor() {
     ${resultados.map(r=>`${r.nombre} gana ${fmtARS(r.ingreso)} = <b>${Math.round(r.pct*100)}%</b> del ingreso → paga <b>${fmtARS(r.monto)}</b>`).join('<br>')}`;
 }
 
+// ══════════════════════════════════════════════
+//  NOTIFICACIONES — OneSignal
+// ══════════════════════════════════════════════
+
+const ONESIGNAL_APP_ID = localStorage.getItem('fc_onesignal_id') || '';
+const ADMIN_ONESIGNAL_PLAYER_ID = localStorage.getItem('fc_admin_player_id') || '';
+
+function initOneSignal() {
+  if (!ONESIGNAL_APP_ID) return;
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(async function(OneSignal) {
+    await OneSignal.init({
+      appId: ONESIGNAL_APP_ID,
+      notifyButton: { enable: false },
+      allowLocalhostAsSecureOrigin: true,
+    });
+    // Save player ID for this user
+    const playerId = await OneSignal.User.PushSubscription.id;
+    if (playerId && currentUser) {
+      localStorage.setItem('fc_player_id_' + currentUser.uid, playerId);
+      // Save to Firestore so admin can send notifications
+      await fsSet('users', currentUser.uid, {oneSignalPlayerId: playerId}).catch(()=>{});
+    }
+  });
+}
+
+async function sendNotifToAdmin(titulo, mensaje) {
+  // Saves a notification request to Firestore - admin's app polls for new ones
+  if (!currentUser) return;
+  try {
+    const notif = {
+      id: Date.now(),
+      from: currentUser.email,
+      titulo,
+      mensaje,
+      timestamp: new Date().toISOString(),
+      leida: false
+    };
+    // Store in admin's notifications collection
+    const adminNotifs = await fsGet('notifications', 'admin');
+    const lista = adminNotifs?.lista || [];
+    lista.unshift(notif);
+    await fsSet('notifications', 'admin', {lista: lista.slice(0, 50)});
+  } catch(e) { console.error('notif error:', e); }
+}
+
+async function checkNotificaciones() {
+  if (!currentUser) return;
+  const hoy = new Date();
+  const notifs = [];
+
+  // Vencimiento de gastos pendientes
+  const movs = userData.movimientos || [];
+  movs.forEach(m => {
+    if (m.tipo === 'Gasto' && m.estado === 'Pendiente') {
+      // Check vencimiento field first, then fall back to fecha
+      const fechaVenc = m.vencimiento ? new Date(m.vencimiento) : null;
+      const fechaMov  = new Date(m.fecha);
+      const fechaCheck = fechaVenc || fechaMov;
+      const diff = Math.ceil((fechaCheck - hoy) / (1000*60*60*24));
+
+      if (fechaVenc) {
+        // Has explicit vencimiento date
+        if (diff < 0) {
+          notifs.push({
+            tipo: 'vencido',
+            titulo: '🚨 Pago vencido',
+            mensaje: `${m.concepto} venció hace ${Math.abs(diff)} día${Math.abs(diff)>1?'s':''} — ${fmtARS(m.importe)}`,
+            urgente: true
+          });
+        } else if (diff <= 3) {
+          notifs.push({
+            tipo: 'cuota',
+            titulo: '⏰ Pago próximo a vencer',
+            mensaje: `${m.concepto} vence ${diff === 0 ? 'hoy' : `en ${diff} día${diff>1?'s':''}`} — ${fmtARS(m.importe)}`,
+            urgente: diff === 0
+          });
+        }
+      } else if (diff >= 0 && diff <= 3) {
+        // No vencimiento, use fecha as reference
+        notifs.push({
+          tipo: 'cuota',
+          titulo: '⏰ Pago pendiente',
+          mensaje: `${m.concepto} — ${fmtARS(m.importe)}`,
+          urgente: diff === 0
+        });
+      }
+    }
+  });
+
+  // Presupuesto excedido
+  const budgets = userData.budgets || {};
+  const mesActual = movs.filter(m => {
+    const f = new Date(m.fecha);
+    return f.getMonth() === hoy.getMonth() && f.getFullYear() === hoy.getFullYear();
+  });
+  Object.entries(budgets).forEach(([cat, limite]) => {
+    const gastado = mesActual.filter(m => m.tipo==='Gasto' && m.categoria===cat).reduce((s,m)=>s+m.importe,0);
+    const pct = gastado / limite;
+    if (pct >= 0.9) {
+      notifs.push({
+        tipo: 'presupuesto',
+        titulo: `⚠️ Presupuesto ${cat}`,
+        mensaje: `Usaste ${Math.round(pct*100)}% del presupuesto de ${cat} — ${fmtARS(gastado)} de ${fmtARS(limite)}`,
+        urgente: pct >= 1
+      });
+    }
+  });
+
+  // Sin cargar gastos hace más de 5 días
+  const ultimoMov = movs.filter(m => new Date(m.fecha) <= hoy).sort((a,b) => new Date(b.fecha)-new Date(a.fecha))[0];
+  if (ultimoMov) {
+    const diasSinCargar = Math.ceil((hoy - new Date(ultimoMov.fecha)) / (1000*60*60*24));
+    if (diasSinCargar >= 5) {
+      notifs.push({
+        tipo: 'inactividad',
+        titulo: '📝 Sin movimientos recientes',
+        mensaje: `Hace ${diasSinCargar} días que no cargás gastos. ¿Todo bien?`,
+        urgente: false
+      });
+    }
+  }
+
+  // Show in-app notifications badge
+  updateNotifBadge(notifs.length);
+
+  // Store for notification panel
+  window._flowcashNotifs = notifs;
+  return notifs;
+}
+
+function getNotifications() {
+  return window._flowcashNotifs || [];
+}
+
+function updateNotifBadge(count) {
+  const badge = document.getElementById('notif-badge');
+  if (badge) {
+    badge.textContent = count;
+    badge.style.display = count > 0 ? 'flex' : 'none';
+  }
+}
+
+function openNotifPanel() {
+  const notifs = getNotifications();
+  const panel = document.getElementById('notif-panel');
+  if (!panel) return;
+
+  panel.innerHTML = notifs.length ? notifs.map(n => `
+    <div style="padding:12px;background:${n.urgente?'rgba(248,113,113,0.08)':'var(--surface2)'};border:1px solid ${n.urgente?'rgba(248,113,113,0.3)':'var(--border)'};border-radius:var(--radius-sm);margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">${n.titulo}</div>
+      <div style="font-size:12px;color:var(--text2)">${n.mensaje}</div>
+    </div>`).join('')
+  : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px">Sin notificaciones pendientes ✅</div>';
+
+  document.getElementById('notif-overlay').classList.add('open');
+}
+
+function closeNotifPanel() {
+  document.getElementById('notif-overlay').classList.remove('open');
+}
+
+// Check admin notifications (new user registrations)
+async function checkAdminNotifs() {
+  if (currentUser?.email !== ADMIN_EMAIL) return;
+  try {
+    const data = await fsGet('notifications', 'admin');
+    const noLeidas = (data?.lista || []).filter(n => !n.leida);
+    if (noLeidas.length > 0) {
+      const badge = document.getElementById('notif-badge');
+      if (badge) {
+        badge.textContent = noLeidas.length;
+        badge.style.display = 'flex';
+      }
+    }
+  } catch(e) {}
+}
+
 loadSavedTheme();
 
-// Register service worker for PWA
+// Register service worker for PWA + detect updates
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js')
-    .then(reg => console.log('SW registered'))
-    .catch(err => console.log('SW error:', err));
+  navigator.serviceWorker.register('/sw.js').then(reg => {
+    // Check for updates every 30 min
+    setInterval(() => reg.update(), 30 * 60 * 1000);
+    reg.addEventListener('updatefound', () => {
+      const newWorker = reg.installing;
+      newWorker.addEventListener('statechange', () => {
+        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+          // Show update banner
+          showUpdateBanner();
+        }
+      });
+    });
+  }).catch(err => console.log('SW error:', err));
+
+  // Listen for update messages
+  navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data?.type === 'UPDATE_AVAILABLE') showUpdateBanner();
+  });
+}
+
+function showUpdateBanner() {
+  // Don't show if already showing
+  if (document.getElementById('update-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'update-banner';
+  banner.style.cssText = 'position:fixed;bottom:80px;left:50%;transform:translateX(-50%);background:#1d4ed8;color:white;padding:12px 20px;border-radius:12px;font-size:13px;font-weight:700;z-index:9999;display:flex;align-items:center;gap:12px;box-shadow:0 4px 24px rgba(0,0,0,0.4);white-space:nowrap';
+  banner.innerHTML = '🚀 Nueva versión disponible <button onclick="applyUpdate()" style="background:white;color:#1d4ed8;border:none;border-radius:6px;padding:4px 12px;font-weight:700;cursor:pointer;font-size:12px">Actualizar</button><button onclick="this.parentElement.remove()" style="background:none;border:none;color:rgba(255,255,255,0.7);cursor:pointer;font-size:16px">✕</button>';
+  document.body.appendChild(banner);
+}
+
+function applyUpdate() {
+  navigator.serviceWorker.getRegistration().then(reg => {
+    if (reg?.waiting) reg.waiting.postMessage('skipWaiting');
+  });
+  window.location.reload();
 }
 
 // Try restore session, otherwise show auth screen
