@@ -22,28 +22,44 @@
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/screenshot-mobile.png",
-      "sizes": "390x844",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
-  "categories": ["finance", "productivity"],
   "shortcuts": [
     {
-      "name": "Nuevo movimiento",
-      "short_name": "Nuevo",
-      "description": "Agregar un movimiento rápido",
+      "name": "➕ Nuevo movimiento",
+      "short_name": "Nuevo gasto",
+      "description": "Agregar un movimiento rápidamente",
       "url": "/?action=new",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
-      "name": "Dashboard",
-      "short_name": "Inicio",
+      "name": "📊 Dashboard",
+      "short_name": "Dashboard",
       "url": "/",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "🛒 Supermercados",
+      "short_name": "Promos",
+      "url": "/?view=supermercados",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
+  ],
+  "categories": [
+    "finance",
+    "productivity"
   ]
 }
