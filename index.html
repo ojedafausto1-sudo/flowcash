@@ -2083,6 +2083,13 @@ body {
       <button class="estado-btn" data-estado="Pendiente" onclick="setEstado('Pendiente',this)">⏳ Pendiente</button>
     </div>
 
+    <!-- Fecha de vencimiento -->
+    <div id="vencimiento-group" style="display:none;margin-top:8px">
+      <label class="mform-label">📅 Fecha de vencimiento</label>
+      <input type="date" id="m-vencimiento" class="mform-input" style="width:100%">
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">Te avisamos cuando se acerque o venza</div>
+    </div>
+
     <!-- Cuotas toggle -->
     <div class="toggle-row">
       <span class="toggle-label">Compra en cuotas</span>
@@ -2685,28 +2692,49 @@ async function enviarBackupSheets() {
   } catch(e) { /* backup silencioso */ }
 }
 
-function setSheetsBackupUrl(url) {
+async function setSheetsBackupUrl(url) {
   SHEETS_BACKUP_URL = url;
   localStorage.setItem('fc_backup_url', url);
   showToast('✅ Backup a Google Sheets activado');
+  if (currentUser?.email === ADMIN_EMAIL) {
+    try {
+      const existing = await fsGet('config', 'global').catch(()=>({}));
+      await fsSet('config', 'global', {...(existing||{}), backupUrl: url});
+    } catch(e) {}
+  }
 }
 
-function saveOneSignalId() {
+async function saveOneSignalId() {
   const id = document.getElementById('onesignal-id-input').value.trim();
   localStorage.setItem('fc_onesignal_id', id);
   const st = document.getElementById('onesignal-status');
-  if (st) st.textContent = id ? '✅ OneSignal configurado' : 'Sin configurar';
+  if (st) st.textContent = id ? '✅ OneSignal configurado — guardando para todos los usuarios...' : 'Sin configurar';
   if (id) initOneSignal();
+  // Save globally so all users get it automatically
+  if (currentUser?.email === ADMIN_EMAIL) {
+    try {
+      const existing = await fsGet('config', 'global').catch(()=>({}));
+      await fsSet('config', 'global', {...(existing||{}), onesignalId: id});
+      if (st) st.textContent = '✅ Configurado para todos los usuarios';
+    } catch(e) {}
+  }
   showToast('🔔 Notificaciones guardadas');
 }
 
-function setPromosWorkerUrl(url) {
+async function setPromosWorkerUrl(url) {
   PROMOS_WORKER_URL = url;
   localStorage.setItem('fc_promos_url', url);
   const st = document.getElementById('promos-url-status');
-  if (st) st.textContent = url ? '✅ Worker configurado — promos en tiempo real activas' : 'Sin configurar';
+  if (st) st.textContent = url ? '✅ Worker configurado' : 'Sin configurar';
   showToast('✅ Worker de promos guardado');
-  promosCache = null; // invalidate cache
+  promosCache = null;
+  // Save globally for all users
+  if (currentUser?.email === ADMIN_EMAIL) {
+    try {
+      const existing = await fsGet('config', 'global').catch(()=>({}));
+      await fsSet('config', 'global', {...(existing||{}), promosUrl: url});
+    } catch(e) {}
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -2800,6 +2828,12 @@ function launchApp() {
   loadSavedTheme();
   renderThemePanel();
   updateNotifBadge();
+  // Handle URL shortcuts (from manifest shortcuts or home screen widget)
+  const _params = new URLSearchParams(window.location.search);
+  if (_params.get('action') === 'new') setTimeout(openModal, 600);
+  if (_params.get('view')) setTimeout(() => showView(_params.get('view')), 400);
+  // Auto-load global config
+  setTimeout(checkNotificaciones, 2000);
 }
 
 // ══════════════════════════════════════════════
@@ -4353,6 +4387,25 @@ async function sendNotifToAdmin(titulo, mensaje) {
 
 async function checkNotificaciones() {
   if (!currentUser) return;
+  // Auto-load global config from admin if not set locally
+  if (!ONESIGNAL_APP_ID || !localStorage.getItem('fc_promos_url')) {
+    try {
+      const globalCfg = await fsGet('config', 'global');
+      if (globalCfg) {
+        if (globalCfg.onesignalId && !localStorage.getItem('fc_onesignal_id')) {
+          localStorage.setItem('fc_onesignal_id', globalCfg.onesignalId);
+        }
+        if (globalCfg.promosUrl && !localStorage.getItem('fc_promos_url')) {
+          localStorage.setItem('fc_promos_url', globalCfg.promosUrl);
+          PROMOS_WORKER_URL = globalCfg.promosUrl;
+        }
+        if (globalCfg.backupUrl && !localStorage.getItem('fc_backup_url')) {
+          localStorage.setItem('fc_backup_url', globalCfg.backupUrl);
+          SHEETS_BACKUP_URL = globalCfg.backupUrl;
+        }
+      }
+    } catch(e) {}
+  }
   const hoy = new Date();
   const notifs = [];
 
