@@ -2828,12 +2828,14 @@ function launchApp() {
   loadSavedTheme();
   renderThemePanel();
   updateNotifBadge();
-  // Handle URL shortcuts (from manifest shortcuts or home screen widget)
+  // Cargar config global PRIMERO (URLs de promos, backup, notificaciones)
+  cargarConfigGlobal().then(() => {
+    setTimeout(checkNotificaciones, 1000);
+  });
+  // Handle URL shortcuts
   const _params = new URLSearchParams(window.location.search);
   if (_params.get('action') === 'new') setTimeout(openModal, 600);
   if (_params.get('view')) setTimeout(() => showView(_params.get('view')), 400);
-  // Auto-load global config
-  setTimeout(checkNotificaciones, 2000);
 }
 
 // ══════════════════════════════════════════════
@@ -4385,27 +4387,28 @@ async function sendNotifToAdmin(titulo, mensaje) {
   } catch(e) { console.error('notif error:', e); }
 }
 
+async function cargarConfigGlobal() {
+  if (!currentUser) return;
+  try {
+    const globalCfg = await fsGet('config', 'global');
+    if (!globalCfg) return;
+    // Siempre aplicar la config global (sobreescribe la local)
+    if (globalCfg.promosUrl) {
+      localStorage.setItem('fc_promos_url', globalCfg.promosUrl);
+      PROMOS_WORKER_URL = globalCfg.promosUrl;
+    }
+    if (globalCfg.backupUrl) {
+      localStorage.setItem('fc_backup_url', globalCfg.backupUrl);
+      SHEETS_BACKUP_URL = globalCfg.backupUrl;
+    }
+    if (globalCfg.onesignalId) {
+      localStorage.setItem('fc_onesignal_id', globalCfg.onesignalId);
+    }
+  } catch(e) { console.error('cargarConfigGlobal:', e); }
+}
+
 async function checkNotificaciones() {
   if (!currentUser) return;
-  // Auto-load global config from admin if not set locally
-  if (!ONESIGNAL_APP_ID || !localStorage.getItem('fc_promos_url')) {
-    try {
-      const globalCfg = await fsGet('config', 'global');
-      if (globalCfg) {
-        if (globalCfg.onesignalId && !localStorage.getItem('fc_onesignal_id')) {
-          localStorage.setItem('fc_onesignal_id', globalCfg.onesignalId);
-        }
-        if (globalCfg.promosUrl && !localStorage.getItem('fc_promos_url')) {
-          localStorage.setItem('fc_promos_url', globalCfg.promosUrl);
-          PROMOS_WORKER_URL = globalCfg.promosUrl;
-        }
-        if (globalCfg.backupUrl && !localStorage.getItem('fc_backup_url')) {
-          localStorage.setItem('fc_backup_url', globalCfg.backupUrl);
-          SHEETS_BACKUP_URL = globalCfg.backupUrl;
-        }
-      }
-    } catch(e) {}
-  }
   const hoy = new Date();
   const notifs = [];
 
