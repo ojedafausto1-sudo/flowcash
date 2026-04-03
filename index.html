@@ -2697,10 +2697,7 @@ async function setSheetsBackupUrl(url) {
   localStorage.setItem('fc_backup_url', url);
   showToast('✅ Backup a Google Sheets activado');
   if (currentUser?.email === ADMIN_EMAIL) {
-    try {
-      const existing = await fsGet('config', 'global').catch(()=>({}));
-      await fsSet('config', 'global', {...(existing||{}), backupUrl: url});
-    } catch(e) {}
+    await guardarConfigGlobal({backupUrl: url});
   }
 }
 
@@ -2708,15 +2705,10 @@ async function saveOneSignalId() {
   const id = document.getElementById('onesignal-id-input').value.trim();
   localStorage.setItem('fc_onesignal_id', id);
   const st = document.getElementById('onesignal-status');
-  if (st) st.textContent = id ? '✅ OneSignal configurado — guardando para todos los usuarios...' : 'Sin configurar';
+  if (st) st.textContent = id ? '✅ Configurado para todos los usuarios' : 'Sin configurar';
   if (id) initOneSignal();
-  // Save globally so all users get it automatically
   if (currentUser?.email === ADMIN_EMAIL) {
-    try {
-      const existing = await fsGet('config', 'global').catch(()=>({}));
-      await fsSet('config', 'global', {...(existing||{}), onesignalId: id});
-      if (st) st.textContent = '✅ Configurado para todos los usuarios';
-    } catch(e) {}
+    await guardarConfigGlobal({onesignalId: id});
   }
   showToast('🔔 Notificaciones guardadas');
 }
@@ -2725,15 +2717,11 @@ async function setPromosWorkerUrl(url) {
   PROMOS_WORKER_URL = url;
   localStorage.setItem('fc_promos_url', url);
   const st = document.getElementById('promos-url-status');
-  if (st) st.textContent = url ? '✅ Worker configurado' : 'Sin configurar';
+  if (st) st.textContent = url ? '✅ Activo' : 'Sin configurar';
   showToast('✅ Worker de promos guardado');
   promosCache = null;
-  // Save globally for all users
   if (currentUser?.email === ADMIN_EMAIL) {
-    try {
-      const existing = await fsGet('config', 'global').catch(()=>({}));
-      await fsSet('config', 'global', {...(existing||{}), promosUrl: url});
-    } catch(e) {}
+    await guardarConfigGlobal({promosUrl: url});
   }
 }
 
@@ -4398,6 +4386,36 @@ async function sendNotifToAdmin(titulo, mensaje) {
     lista.unshift(notif);
     await fsSet('notifications', 'admin', {lista: lista.slice(0, 50)});
   } catch(e) { console.error('notif error:', e); }
+}
+
+async function guardarConfigGlobal(nuevoCampo) {
+  try {
+    // Leer config actual
+    let existing = {};
+    try { existing = await fsGet('config', 'global') || {}; } catch(e) {}
+    // Merge y guardar
+    const merged = {...existing, ...nuevoCampo};
+    // Try PATCH first, then POST if not found
+    const token = FB_TOKEN;
+    const fields = {};
+    for (const [k,v] of Object.entries(merged)) {
+      if (v !== undefined && v !== null) fields[k] = {stringValue: String(v)};
+    }
+    const mask = Object.keys(fields).map(k=>`updateMask.fieldPaths=${encodeURIComponent(k)}`).join('&');
+    let r = await fetch(`${FS_URL}/config/global?${mask}`, {
+      method: 'PATCH',
+      headers: {Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+      body: JSON.stringify({fields})
+    });
+    if (!r.ok) {
+      r = await fetch(`${FS_URL}/config?documentId=global`, {
+        method: 'POST',
+        headers: {Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+        body: JSON.stringify({fields})
+      });
+    }
+    console.log('Config global guardada:', merged);
+  } catch(e) { console.error('guardarConfigGlobal:', e); }
 }
 
 async function cargarConfigGlobal() {
