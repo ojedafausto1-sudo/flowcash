@@ -3408,17 +3408,30 @@ function renderConfig(){
     const st = document.getElementById('backup-url-status');
     if (st) st.textContent = SHEETS_BACKUP_URL ? '✅ Backup activo' : 'Sin configurar';
   }
-  const elO = document.getElementById('onesignal-id-input');
-  if (elO) {
-    elO.value = localStorage.getItem('fc_onesignal_id') || '';
-    const stO = document.getElementById('onesignal-status');
-    if (stO) stO.textContent = elO.value ? '✅ OneSignal configurado' : 'Sin configurar';
+  // Mostrar sección admin solo para el admin
+  const adminSection = document.getElementById('admin-config-section');
+  if (adminSection) {
+    adminSection.style.display = currentUser?.email === ADMIN_EMAIL ? 'block' : 'none';
   }
-  const el2 = document.getElementById('promos-url-input');
-  if (el2) {
-    el2.value = PROMOS_WORKER_URL || '';
-    const st2 = document.getElementById('promos-url-status');
-    if (st2) st2.textContent = PROMOS_WORKER_URL ? '✅ Worker configurado — promos en tiempo real activas' : 'Sin configurar (mostrando datos Carrefour Marzo 2026)';
+  if (currentUser?.email === ADMIN_EMAIL) {
+    const elO = document.getElementById('onesignal-id-input');
+    if (elO) {
+      elO.value = localStorage.getItem('fc_onesignal_id') || '';
+      const stO = document.getElementById('onesignal-status');
+      if (stO) stO.textContent = elO.value ? '✅ OneSignal configurado' : 'Sin configurar';
+    }
+    const el2 = document.getElementById('promos-url-input');
+    if (el2) {
+      el2.value = PROMOS_WORKER_URL || '';
+      const st2 = document.getElementById('promos-url-status');
+      if (st2) st2.textContent = PROMOS_WORKER_URL ? '✅ Activo' : 'Sin configurar';
+    }
+    const el = document.getElementById('backup-url-input');
+    if (el) {
+      el.value = SHEETS_BACKUP_URL || '';
+      const st = document.getElementById('backup-url-status');
+      if (st) st.textContent = SHEETS_BACKUP_URL ? '✅ Backup activo' : 'Sin configurar';
+    }
   }
 }
 function renderCats(){const cats=getUserCats();const el=document.getElementById('config-cats');if(!el)return;el.innerHTML=cats.map(c=>`<span class="tag" style="border-color:${CAT_COLORS[c]||'#94a3b8'}33"><span style="color:${CAT_COLORS[c]||'#94a3b8'}">${CAT_ICONS[c]||'💸'} ${c}</span><button class="tag-edit" onclick="openAddItemModal('cat','${c.replace(/'/g,"\\'")}','${CAT_ICONS[c]||'💸'}','${CAT_COLORS[c]||'#38bdf8'}')">✏️</button><button class="tag-del" onclick="deleteItem('cat','${c.replace(/'/g,"\\'")}')">✕</button></span>`).join('');}
