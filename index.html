@@ -4433,7 +4433,6 @@ async function cargarConfigGlobal() {
   try {
     const globalCfg = await fsGet('config', 'global');
     if (!globalCfg) return;
-    // Siempre aplicar la config global (sobreescribe la local)
     if (globalCfg.promosUrl) {
       localStorage.setItem('fc_promos_url', globalCfg.promosUrl);
       PROMOS_WORKER_URL = globalCfg.promosUrl;
@@ -4444,6 +4443,8 @@ async function cargarConfigGlobal() {
     }
     if (globalCfg.onesignalId) {
       localStorage.setItem('fc_onesignal_id', globalCfg.onesignalId);
+      // Inicializar OneSignal automáticamente
+      initOneSignal();
     }
   } catch(e) { console.error('cargarConfigGlobal:', e); }
 }
@@ -4550,12 +4551,15 @@ function openNotifPanel() {
   const panel = document.getElementById('notif-panel');
   if (!panel) return;
 
-  panel.innerHTML = notifs.length ? notifs.map(n => `
+  // Re-check notifications before showing panel
+  await checkNotificaciones();
+  const notifs2 = getNotifications();
+  panel.innerHTML = notifs2.length ? notifs2.map(n => `
     <div style="padding:12px;background:${n.urgente?'rgba(248,113,113,0.08)':'var(--surface2)'};border:1px solid ${n.urgente?'rgba(248,113,113,0.3)':'var(--border)'};border-radius:var(--radius-sm);margin-bottom:8px">
       <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">${n.titulo}</div>
       <div style="font-size:12px;color:var(--text2)">${n.mensaje}</div>
     </div>`).join('')
-  : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px">Sin notificaciones pendientes ✅</div>';
+  : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px">Sin notificaciones pendientes ✅<br><br><span style="font-size:11px">Las alertas aparecen cuando tenés pagos por vencer, presupuesto al límite o sin cargar gastos hace 5+ días.</span></div>';
 
   document.getElementById('notif-overlay').classList.add('open');
 }
