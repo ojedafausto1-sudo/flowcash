@@ -4546,7 +4546,7 @@ function updateNotifBadge(count) {
   }
 }
 
-function openNotifPanel() {
+async function openNotifPanel() {
   const notifs = getNotifications();
   const panel = document.getElementById('notif-panel');
   if (!panel) return;
