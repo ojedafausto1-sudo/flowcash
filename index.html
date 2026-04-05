@@ -5434,9 +5434,9 @@ async function enviarMensajeAsesor() {
   try {
     const contexto = buildContextoFinanciero();
     const systemPrompt = `Sos un asesor financiero personal amigable y directo para una app argentina llamada FlowCash. Respondés en español argentino, con respuestas concisas y útiles. Usás números en pesos argentinos. Cuando ves datos concretos, los analizás y dás consejos específicos, no genéricos. Usás emojis con moderación. Respondés en máximo 3-4 párrafos salvo que te pidan algo detallado.\n\n${contexto}`;
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch(PROMOS_WORKER_URL.replace(/\/$/, '') + '/ia', {
       method: 'POST',
-      headers: {'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
@@ -5445,6 +5445,7 @@ async function enviarMensajeAsesor() {
       })
     });
     const data = await response.json();
+    console.log('Asesor API response:', JSON.stringify(data));
     const respuesta = data.content?.[0]?.text || 'No pude procesar la respuesta.';
     asesorHistory.push({ role:'assistant', content:respuesta });
     const loadEl = document.getElementById(loadId);
@@ -5505,9 +5506,9 @@ async function analizarTicketIA() {
   if (btn)     btn.disabled = true;
   if (loading) loading.style.display = '';
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch(PROMOS_WORKER_URL.replace(/\/$/, '') + '/ia', {
       method: 'POST',
-      headers: {'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
