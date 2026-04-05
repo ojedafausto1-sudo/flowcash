@@ -5437,6 +5437,12 @@ async function enviarMensajeAsesor() {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: asesorHistory
+      })
     });
     const data = await response.json();
     const respuesta = data.content?.[0]?.text || 'No pude procesar la respuesta.';
@@ -5502,6 +5508,13 @@ async function analizarTicketIA() {
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: ticketImageBase64 } },
             { type:'text', text:`Analizá este ticket/factura y extraé los gastos. Respondé SOLO con un JSON válido, sin texto extra, sin markdown, sin backticks. Formato exacto:
 {"items":[{"concepto":"nombre del producto/servicio","importe":1234.56,"categoria":"Comida"}]}
 Categorías disponibles: Comida, Ropa, Medico, Mascotas, Vivienda, Suscripciones, Transporte, Estetica, Regalos, Personal, Estudios, Tecnología, Automotor, Telefono, Juegos, Salidas, Cocina, Gastos hormiga.
