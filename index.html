@@ -5593,7 +5593,9 @@ async function importarTodosTicket() {
   showView('movimientos');
 }
 
-loadSavedTheme(); for PWA + detect updates
+loadSavedTheme();
+
+// Register service worker for PWA + detect updates
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').then(reg => {
     // Check for updates every 30 min
