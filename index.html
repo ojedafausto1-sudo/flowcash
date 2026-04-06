@@ -682,22 +682,113 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
+  gap: 3px;
+  padding: 6px 10px;
   border: none;
   background: none;
   color: var(--text3);
   font-family: var(--font);
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
   flex: 1;
   min-width: 0;
   transition: color 0.15s;
+  border-radius: var(--radius-sm);
 }
 .bnav-item.active { color: var(--accent); }
-.bnav-icon { font-size: 18px; line-height: 1; }
-.bnav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.bnav-item.active .bnav-icon { transform: scale(1.1); }
+.bnav-icon { font-size: 22px; line-height: 1; transition: transform 0.15s; }
+.bnav-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; font-size: 10px; }
+
+/* ── MOBILE DRAWER ────────────────────────── */
+.mobile-drawer-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 300;
+  backdrop-filter: blur(2px);
+}
+.mobile-drawer-overlay.open { display: block; }
+.mobile-drawer {
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  width: 280px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  z-index: 301;
+  transform: translateX(-100%);
+  transition: transform 0.25s ease;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+.mobile-drawer.open { transform: translateX(0); }
+.drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-logo {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 18px; font-weight: 800; color: var(--text);
+}
+.drawer-logo-icon {
+  width: 34px; height: 34px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.drawer-close {
+  width: 34px; height: 34px;
+  border: none; background: var(--surface2);
+  border-radius: var(--radius-sm);
+  color: var(--text2); font-size: 18px;
+  cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+}
+.drawer-nav { padding: 8px; flex: 1; }
+.drawer-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  margin-bottom: 2px;
+  border: none; background: none;
+  color: var(--text2);
+  font-family: var(--font);
+  font-size: 15px; font-weight: 500;
+  cursor: pointer; width: 100%;
+  text-align: left;
+  border-radius: var(--radius-sm);
+  transition: all 0.15s;
+}
+.drawer-item:hover { background: var(--surface2); color: var(--text); }
+.drawer-item.active { background: rgba(56,189,248,0.1); color: var(--accent); font-weight: 600; }
+.drawer-item-icon { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+.drawer-footer {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.drawer-user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0;
+}
+.drawer-avatar {
+  width: 38px; height: 38px;
+  background: linear-gradient(135deg, var(--accent), var(--purple));
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: #0f172a;
+  flex-shrink: 0;
+}
+.drawer-user-info { flex: 1; min-width: 0; }
+.drawer-user-name { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drawer-user-email { font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 
 /* ── MODALS ───────────────────────────────── */
 .modal-overlay {
@@ -1545,7 +1636,7 @@ body {
 
 /* ── DEVICE INDICATOR ─────────────────────── */
 @media (max-width: 1023px) {
-  .views-container { padding-bottom: 80px; }
+  .views-container { padding-bottom: 90px; }
 }
 
 </style>
@@ -2186,7 +2277,7 @@ body {
     </div><!-- /main -->
   </div><!-- /app-shell -->
 
-  <!-- Bottom nav mobile -->
+  <!-- Bottom nav mobile — solo 5 items principales -->
   <nav class="bottom-nav" id="bottom-nav">
     <button class="bnav-item active" data-view="dashboard" onclick="showView('dashboard')">
       <span class="bnav-icon">⊞</span><span class="bnav-label">Inicio</span>
@@ -2194,46 +2285,55 @@ body {
     <button class="bnav-item" data-view="movimientos" onclick="showView('movimientos')">
       <span class="bnav-icon">⇄</span><span class="bnav-label">Movimientos</span>
     </button>
-    <button class="bnav-item" data-view="presupuesto" onclick="showView('presupuesto')">
-      <span class="bnav-icon">◎</span><span class="bnav-label">Presupuesto</span>
-    </button>
-    <button class="bnav-item" data-view="cuotas" onclick="showView('cuotas')">
-      <span class="bnav-icon">▤</span><span class="bnav-label">Cuotas</span>
-    </button>
-    <button class="bnav-item" data-view="anual" onclick="showView('anual')">
-      <span class="bnav-icon">⊟</span><span class="bnav-label">Anual</span>
-    </button>
-    <button class="bnav-item" data-view="buscar" onclick="showView('buscar')">
-      <span class="bnav-icon">⌕</span><span class="bnav-label">Buscar</span>
-    </button>
-    <button class="bnav-item" data-view="wallets" onclick="showView('wallets')">
-      <span class="bnav-icon">◫</span><span class="bnav-label">Billeteras</span>
-    </button>
-    <button class="bnav-item" data-view="supermercados" onclick="showView('supermercados')">
-      <span class="bnav-icon">🛒</span><span class="bnav-label">Supers</span>
-    </button>
     <button class="bnav-item" data-view="metas" onclick="showView('metas')">
       <span class="bnav-icon">🎯</span><span class="bnav-label">Metas</span>
-    </button>
-    <button class="bnav-item" data-view="deudas" onclick="showView('deudas')">
-      <span class="bnav-icon">🤝</span><span class="bnav-label">Deudas</span>
-    </button>
-    <button class="bnav-item" data-view="pareja" onclick="showView('pareja')">
-      <span class="bnav-icon">👫</span><span class="bnav-label">Pareja</span>
     </button>
     <button class="bnav-item" data-view="asesor" onclick="showView('asesor')">
       <span class="bnav-icon">🤖</span><span class="bnav-label">Asesor</span>
     </button>
-    <button class="bnav-item" data-view="ticket" onclick="showView('ticket')">
-      <span class="bnav-icon">📷</span><span class="bnav-label">Ticket</span>
-    </button>
-    <button class="bnav-item" data-view="divisor" onclick="showView('divisor')">
-      <span class="bnav-icon">÷</span><span class="bnav-label">Divisor</span>
-    </button>
-    <button class="bnav-item" data-view="config" onclick="showView('config')">
-      <span class="bnav-icon">◈</span><span class="bnav-label">Config</span>
+    <button class="bnav-item" id="bnav-mas" onclick="openMobileDrawer()">
+      <span class="bnav-icon">☰</span><span class="bnav-label">Más</span>
     </button>
   </nav>
+
+  <!-- Mobile drawer overlay -->
+  <div class="mobile-drawer-overlay" id="mobile-drawer-overlay" onclick="closeMobileDrawer()"></div>
+
+  <!-- Mobile drawer -->
+  <div class="mobile-drawer" id="mobile-drawer">
+    <div class="drawer-header">
+      <div class="drawer-logo">
+        <div class="drawer-logo-icon">💰</div>
+        FlowCash
+      </div>
+      <button class="drawer-close" onclick="closeMobileDrawer()">✕</button>
+    </div>
+    <div class="drawer-nav">
+      <button class="drawer-item" data-view="presupuesto" onclick="showView('presupuesto');closeMobileDrawer()"><span class="drawer-item-icon">◎</span>Presupuesto</button>
+      <button class="drawer-item" data-view="cuotas" onclick="showView('cuotas');closeMobileDrawer()"><span class="drawer-item-icon">▤</span>Cuotas</button>
+      <button class="drawer-item" data-view="anual" onclick="showView('anual');closeMobileDrawer()"><span class="drawer-item-icon">⊟</span>Vista Anual</button>
+      <button class="drawer-item" data-view="buscar" onclick="showView('buscar');closeMobileDrawer()"><span class="drawer-item-icon">⌕</span>Buscar</button>
+      <button class="drawer-item" data-view="wallets" onclick="showView('wallets');closeMobileDrawer()"><span class="drawer-item-icon">◫</span>Billeteras</button>
+      <button class="drawer-item" data-view="supermercados" onclick="showView('supermercados');closeMobileDrawer()"><span class="drawer-item-icon">🛒</span>Supermercados</button>
+      <button class="drawer-item" data-view="deudas" onclick="showView('deudas');closeMobileDrawer()"><span class="drawer-item-icon">🤝</span>Deudas</button>
+      <button class="drawer-item" data-view="pareja" onclick="showView('pareja');closeMobileDrawer()"><span class="drawer-item-icon">👫</span>Modo pareja</button>
+      <button class="drawer-item" data-view="ticket" onclick="showView('ticket');closeMobileDrawer()"><span class="drawer-item-icon">📷</span>Escanear ticket</button>
+      <button class="drawer-item" data-view="divisor" onclick="showView('divisor');closeMobileDrawer()"><span class="drawer-item-icon">÷</span>Divisor de gastos</button>
+      <button class="drawer-item" data-view="config" onclick="showView('config');closeMobileDrawer()"><span class="drawer-item-icon">◈</span>Configuración</button>
+      <div id="drawer-admin-btn"></div>
+    </div>
+    <div class="drawer-footer">
+      <div class="drawer-user">
+        <div class="drawer-avatar" id="drawer-avatar">?</div>
+        <div class="drawer-user-info">
+          <div class="drawer-user-name" id="drawer-name">Usuario</div>
+          <div class="drawer-user-email" id="drawer-email">email</div>
+        </div>
+      </div>
+      <button class="dropdown-item danger" style="width:100%;margin-top:6px;border-radius:var(--radius-sm)" onclick="doLogout()">↩ Cerrar sesión</button>
+    </div>
+  </div>
+
 </div><!-- /app -->
 
 <!-- Profile dropdown -->
@@ -3100,7 +3200,7 @@ function launchApp() {
   const email   = currentUser?.email || '';
   const initial = (name[0] || 'U').toUpperCase();
 
-  ['topbar-avatar','sidebar-avatar'].forEach(id => {
+  ['topbar-avatar','sidebar-avatar','drawer-avatar'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.textContent = initial;
   });
@@ -3108,6 +3208,8 @@ function launchApp() {
   const se = document.getElementById('sidebar-email');  if(se) se.textContent = email;
   const pn = document.getElementById('pm-name');        if(pn) pn.textContent = name;
   const pe = document.getElementById('pm-email');       if(pe) pe.textContent = email;
+  const dn = document.getElementById('drawer-name');    if(dn) dn.textContent = name;
+  const de = document.getElementById('drawer-email');   if(de) de.textContent = email;
 
   if (currentUser?.email === ADMIN_EMAIL) {
     document.getElementById('view-admin').style.display = '';
@@ -3123,6 +3225,9 @@ function launchApp() {
       bn.innerHTML='<span class="bnav-icon">♛</span><span class="bnav-label">Admin</span>';
       bn.onclick=()=>showView('admin');
       document.getElementById('bottom-nav').appendChild(bn);
+      // Drawer admin
+      const da = document.getElementById('drawer-admin-btn');
+      if (da) da.innerHTML = '<button class="drawer-item" data-view="admin" onclick="showView(\'admin\');closeMobileDrawer()"><span class="drawer-item-icon">♛</span>Admin</button>';
     }
   }
 
@@ -3149,8 +3254,11 @@ function showView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   const el = document.getElementById('view-'+name);
   if (el) el.classList.add('active');
-  document.querySelectorAll('.nav-item,.bnav-item').forEach(b =>
+  document.querySelectorAll('.nav-item,.bnav-item,.drawer-item').forEach(b =>
     b.classList.toggle('active', b.dataset.view === name));
+  // El botón Más no tiene data-view, no lo tocamos
+  const masBtn = document.getElementById('bnav-mas');
+  if (masBtn) masBtn.classList.remove('active');
   closeAllDropdowns();
   if (name==='dashboard')   renderDashboard();
   if (name==='movimientos') renderMovimientos();
@@ -3169,6 +3277,18 @@ function showView(name) {
   if (name==='supermercados') buscarPromos();
   if (name==='divisor')       initDivisor();
   if (name==='divisor')       initDivisor();
+}
+
+function openMobileDrawer() {
+  document.getElementById('mobile-drawer').classList.add('open');
+  document.getElementById('mobile-drawer-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeMobileDrawer() {
+  document.getElementById('mobile-drawer').classList.remove('open');
+  document.getElementById('mobile-drawer-overlay').classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 function closeAllDropdowns() {
