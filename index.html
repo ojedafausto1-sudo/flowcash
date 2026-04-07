@@ -3155,6 +3155,15 @@ async function handleAuthUser(user) {
       data = {status};
     }
     if (user.email === ADMIN_EMAIL || data.status === 'approved') {
+      // Verificar vencimiento
+      if (data.status === 'approved' && data.accessUntil && user.email !== ADMIN_EMAIL) {
+        const vence = new Date(data.accessUntil);
+        if (vence < new Date()) {
+          await fsSet('users', user.uid, {status: 'pending'});
+          showPendingScreen();
+          return;
+        }
+      }
       await loadFromFirestore();
       launchApp();
     } else if (data.status === 'pending') {
@@ -4451,51 +4460,91 @@ function saveMovimiento(){
 async function loadAdminUsers(){
   try{
     const users = await fsList('users');
+    const hoy   = new Date();
+
     users.forEach(u => {
       u.displayName  = (u.name && u.name !== 'undefined' && u.name !== 'null' && u.name.trim())
         ? u.name.trim() : (u.email ? u.email.split('@')[0] : 'Sin nombre');
       u.displayEmail = (u.email && u.email !== 'undefined') ? u.email : '(sin email)';
+
+      // Auto-suspender si venció
+      if (u.status === 'approved' && u.accessUntil) {
+        const vence = new Date(u.accessUntil);
+        if (vence < hoy) {
+          u.status = 'pending';
+          u._vencido = true;
+          fsSet('users', u.id, {status:'pending'}).catch(()=>{});
+        }
+      }
     });
 
     const pending = users.filter(u => u.status === 'pending');
     const active  = users.filter(u => u.status === 'approved' && u.displayEmail !== ADMIN_EMAIL);
+    const suspended = users.filter(u => u.status === 'pending' && u._vencido);
 
     // ── Pendientes ──────────────────────────
     const pl = document.getElementById('admin-pending-list');
     if (pl) pl.innerHTML = pending.length
-      ? pending.map(u => `
-        <div class="admin-user-row">
-          <div class="admin-user-info">
-            <div class="admin-user-name">${u.displayName}</div>
-            <div class="admin-user-email">${u.displayEmail}</div>
-          </div>
-          <div class="admin-actions">
-            <button class="btn-secondary" style="font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3)"
-              onclick="approveUser('${u.id}','${u.displayEmail}')">✓ Aprobar</button>
-            <button class="btn-danger" style="font-size:11px"
-              onclick="eliminarUsuario('${u.id}','${u.displayEmail}')">🗑 Rechazar y eliminar</button>
-          </div>
-        </div>`).join('')
+      ? pending.map(u => {
+          const esVencido = u._vencido;
+          return `<div class="admin-user-row">
+            <div class="admin-user-info">
+              <div class="admin-user-name">${u.displayName}</div>
+              <div class="admin-user-email">${u.displayEmail}</div>
+              ${esVencido ? '<div style="font-size:11px;color:var(--red);font-weight:700">⏰ Acceso vencido</div>' : '<div style="font-size:11px;color:var(--text3)">Solicitud nueva</div>'}
+            </div>
+            <div class="admin-actions" style="flex-wrap:wrap;gap:4px">
+              <button class="btn-secondary" style="font-size:11px;color:var(--accent);border-color:rgba(56,189,248,0.3)"
+                onclick="darAcceso('${u.id}','${u.displayEmail}',5)">🎁 5 días</button>
+              <button class="btn-secondary" style="font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3)"
+                onclick="darAcceso('${u.id}','${u.displayEmail}',30)">✓ 30 días</button>
+              <button class="btn-danger" style="font-size:11px"
+                onclick="eliminarUsuario('${u.id}','${u.displayEmail}')">🗑</button>
+            </div>
+          </div>`;
+        }).join('')
       : '<div style="font-size:13px;color:var(--text3);padding:12px 0">Sin solicitudes pendientes ✅</div>';
 
     // ── Activos ─────────────────────────────
     const al = document.getElementById('admin-all-list');
     if (al) al.innerHTML = active.length
-      ? active.map(u => `
-        <div class="admin-user-row">
-          <div class="admin-user-info">
-            <div class="admin-user-name">${u.displayName}</div>
-            <div class="admin-user-email">${u.displayEmail}</div>
-            <div style="font-size:11px;color:var(--text3);margin-top:2px">${(u.movimientos||[]).length} movimientos</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:6px">
-            <span class="badge badge-paid">Activo</span>
-            <button class="btn-secondary" style="font-size:11px;color:var(--yellow);border-color:rgba(251,191,36,0.3)"
-              onclick="revokeUser('${u.id}','${u.displayEmail}')">⏸ Suspender</button>
-            <button class="btn-danger" style="font-size:11px"
-              onclick="eliminarUsuario('${u.id}','${u.displayEmail}')">🗑 Eliminar</button>
-          </div>
-        </div>`).join('')
+      ? active.map(u => {
+          const vence = u.accessUntil ? new Date(u.accessUntil) : null;
+          const diasRestantes = vence ? Math.ceil((vence - hoy) / 86400000) : null;
+          let venceInfo = '';
+          let venceBadge = '<span class="badge badge-paid" style="font-size:10px">Activo</span>';
+          if (diasRestantes !== null) {
+            if (diasRestantes <= 3) {
+              venceInfo = `<div style="font-size:11px;color:var(--red);font-weight:700">⚠️ Vence en ${diasRestantes} día${diasRestantes!==1?'s':''}</div>`;
+              venceBadge = `<span class="badge" style="background:rgba(248,113,113,0.15);color:var(--red);font-size:10px">Vence en ${diasRestantes}d</span>`;
+            } else if (diasRestantes <= 7) {
+              venceInfo = `<div style="font-size:11px;color:var(--yellow);font-weight:600">⏰ Vence en ${diasRestantes} días</div>`;
+              venceBadge = `<span class="badge" style="background:rgba(251,191,36,0.15);color:var(--yellow);font-size:10px">Vence en ${diasRestantes}d</span>`;
+            } else {
+              const fechaStr = vence.toLocaleDateString('es-AR');
+              venceInfo = `<div style="font-size:11px;color:var(--text3)">Acceso hasta ${fechaStr}</div>`;
+            }
+          }
+          return `<div class="admin-user-row">
+            <div class="admin-user-info">
+              <div class="admin-user-name">${u.displayName}</div>
+              <div class="admin-user-email">${u.displayEmail}</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:1px">${(u.movimientos||[]).length} movimientos</div>
+              ${venceInfo}
+            </div>
+            <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end">
+              ${venceBadge}
+              <button class="btn-secondary" style="font-size:11px;color:var(--accent);border-color:rgba(56,189,248,0.3)"
+                onclick="darAcceso('${u.id}','${u.displayEmail}',5)">+5d</button>
+              <button class="btn-secondary" style="font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3)"
+                onclick="darAcceso('${u.id}','${u.displayEmail}',30)">+30d</button>
+              <button class="btn-secondary" style="font-size:11px;color:var(--yellow);border-color:rgba(251,191,36,0.3)"
+                onclick="revokeUser('${u.id}','${u.displayEmail}')">⏸</button>
+              <button class="btn-danger" style="font-size:11px"
+                onclick="eliminarUsuario('${u.id}','${u.displayEmail}')">🗑</button>
+            </div>
+          </div>`;
+        }).join('')
       : '<div style="font-size:13px;color:var(--text3)">Sin usuarios activos</div>';
 
     // Patch missing names silently
@@ -4506,18 +4555,36 @@ async function loadAdminUsers(){
     }
   } catch(e) { console.error('loadAdminUsers:', e); }
 }
-async function approveUser(uid, email) {
+
+async function darAcceso(uid, email, dias) {
   try {
-    await fsSet('users', uid, {status: 'approved'});
-    showToast('✅ ' + email + ' aprobado');
+    const hoy   = new Date();
+    // Si ya tiene acceso vigente, sumar desde su fecha actual
+    const users = await fsList('users');
+    const user  = users.find(u => u.id === uid);
+    let base = hoy;
+    if (user?.accessUntil) {
+      const actual = new Date(user.accessUntil);
+      if (actual > hoy) base = actual; // sumar desde donde estaba
+    }
+    const hasta = new Date(base);
+    hasta.setDate(hasta.getDate() + dias);
+    const hastaStr = hasta.toISOString().split('T')[0];
+    await fsSet('users', uid, {status: 'approved', accessUntil: hastaStr});
+    const fechaStr = hasta.toLocaleDateString('es-AR');
+    showToast(`✅ ${email} — acceso hasta ${fechaStr}`);
     loadAdminUsers();
   } catch(e) {
     showToast('Error: ' + e.message);
   }
 }
 
+async function approveUser(uid, email) {
+  await darAcceso(uid, email, 30);
+}
+
 async function eliminarUsuario(uid, email) {
-  if (!confirm('¿Eliminar a ' + (email||uid) + '?\n\nSe borrará su cuenta y todos sus datos.\nTendrá que registrarse de nuevo para pedir acceso.')) return;
+  if (!confirm('¿Eliminar a ' + (email||uid) + '?\n\nSe borrará su cuenta y todos sus datos.')) return;
   try {
     await fsDelete('users', uid);
     showToast('🗑 ' + (email||uid) + ' eliminado');
@@ -4528,11 +4595,10 @@ async function eliminarUsuario(uid, email) {
   }
 }
 
-// Keep rejectUser as alias for backward compat
 async function rejectUser(uid, email) { eliminarUsuario(uid, email); }
 
 async function revokeUser(uid, email) {
-  if (!confirm('¿Suspender a ' + (email||uid) + '?\nNo podrá entrar hasta que lo vuelvas a aprobar.')) return;
+  if (!confirm('¿Suspender a ' + (email||uid) + '?')) return;
   try {
     await fsSet('users', uid, {status: 'pending'});
     showToast('⏸ Acceso suspendido');
@@ -4541,6 +4607,7 @@ async function revokeUser(uid, email) {
     showToast('Error: ' + e.message);
   }
 }
+
 
 // ══════════════════════════════════════════════
 //  SUPERMERCADOS
