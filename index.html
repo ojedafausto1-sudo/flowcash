@@ -3058,19 +3058,7 @@ window.addEventListener('online', async () => {
   if (!currentUser || !FB_TOKEN) return;
   showToast('🌐 Conexión restaurada — sincronizando...');
   try {
-    await fsSet('users', currentUser.uid, {
-      movimientos:    userData.movimientos   || [],
-      budgets:        userData.budgets       || {},
-      customCats:     userData.customCats,
-      customWallets:  userData.customWallets,
-      walletInitials: userData.walletInitials|| {},
-      metas:          userData.metas         || [],
-      tarjetas:       userData.tarjetas      || [],
-      sharedWith:     userData.sharedWith    || {},
-      deudas:         userData.deudas        || [],
-      pareja:         userData.pareja        || {activo:false,email:'',nombre:''},
-      email:          currentUser.email
-    });
+    await saveToFirestore();
     showToast('✅ Datos sincronizados');
   } catch(e) { console.warn('sync error:', e); }
 });
@@ -3181,7 +3169,10 @@ async function saveToFirestore() {
       email:          currentUser.email
     });
     enviarBackupSheets().catch(()=>{});
-  } catch(e) { console.warn('saveToFirestore falló, datos guardados localmente:', e); }
+  } catch(e) {
+    // No mostrar error al usuario — los datos ya están guardados localmente
+    console.warn('saveToFirestore falló, datos guardados localmente:', e);
+  }
 }
 
 async function enviarBackupSheets() {
@@ -4576,8 +4567,7 @@ function saveMovimiento(){
   userData.movimientos.push(...nuevos);
   document.getElementById('modal-overlay').classList.remove('open');
   renderAll();updateNotifBadge();
-  showToast('⏳ Guardando...');
-  saveToFirestore().then(()=>showToast(editingId?'✅ Actualizado':`✅ ${nuevos.length>1?nuevos.length+' guardados':'Guardado'}`));
+  saveToFirestore().then(()=>showToast(editingId?'✅ Actualizado':`✅ ${nuevos.length>1?nuevos.length+' guardados':'Guardado'}`)).catch(()=>showToast(editingId?'✅ Actualizado (local)':`✅ Guardado localmente`));
 }
 
 // ══════════════════════════════════════════════
