@@ -2817,7 +2817,19 @@ function fbSignOut() {
 function fbRestoreSession() {
   try {
     const s = JSON.parse(localStorage.getItem('fc_s') || 'null');
-    if (s && s.e > Date.now()) { FB_TOKEN = s.t; FB_USER = s.u; return s.u; }
+    if (s && s.e > Date.now()) {
+      FB_TOKEN = s.t;
+      FB_USER  = s.u;
+      return s.u;
+    }
+    // Token expirado pero hay cache de usuario — entrar en modo offline
+    if (!isOnline()) {
+      const cachedUser = getCachedUser();
+      if (cachedUser) {
+        FB_USER = {uid: cachedUser.uid, email: cachedUser.email};
+        return FB_USER;
+      }
+    }
   } catch(e) {}
   return null;
 }
@@ -3032,37 +3044,19 @@ async function doRegister() {
 
 function doLogout() {
   fbSignOut();
+  // Limpiar cache local
+  localStorage.removeItem('fc_userdata');
+  localStorage.removeItem('fc_user_profile');
   userData = {movimientos:[],budgets:{},customCats:null,customWallets:null,walletInitials:{},metas:[],tarjetas:[],sharedWith:{},deudas:[],pareja:{activo:false,email:'',nombre:''}};
   document.getElementById('app').style.display = 'none';
   document.getElementById('auth-screen').style.display = 'flex';
   toggleProfileMenu(true);
 }
 
-// ══════════════════════════════════════════════
-//  FIRESTORE LOAD/SAVE
-// ══════════════════════════════════════════════
-async function loadFromFirestore() {
-  if (!currentUser) return;
-  try {
-    const d = await fsGet('users', currentUser.uid);
-    if (d) {
-      userData.name           = d.name           || currentUser.email?.split('@')[0] || '';
-      userData.movimientos    = d.movimientos    || [];
-      userData.budgets        = d.budgets        || {};
-      userData.customCats     = d.customCats     || null;
-      userData.customWallets  = d.customWallets  || null;
-      userData.walletInitials = d.walletInitials || {};
-      userData.metas          = d.metas          || [];
-      userData.tarjetas       = d.tarjetas       || [];
-      userData.sharedWith     = d.sharedWith     || {};
-      userData.deudas         = d.deudas         || [];
-      userData.pareja         = d.pareja         || {activo:false,email:'',nombre:''};
-    }
-  } catch(e) { console.error('loadFromFirestore:', e); }
-}
-
-async function saveToFirestore() {
-  if (!currentUser) return;
+// Sincronizar con Firebase cuando vuelve la conexión
+window.addEventListener('online', async () => {
+  if (!currentUser || !FB_TOKEN) return;
+  showToast('🌐 Conexión restaurada — sincronizando...');
   try {
     await fsSet('users', currentUser.uid, {
       movimientos:    userData.movimientos   || [],
@@ -3077,9 +3071,117 @@ async function saveToFirestore() {
       pareja:         userData.pareja        || {activo:false,email:'',nombre:''},
       email:          currentUser.email
     });
-    // Backup a Google Sheets (silencioso, no bloquea)
+    showToast('✅ Datos sincronizados');
+  } catch(e) { console.warn('sync error:', e); }
+});
+
+window.addEventListener('offline', () => {
+  showToast('📴 Sin conexión — los cambios se guardan localmente');
+});
+
+// ══════════════════════════════════════════════
+//  OFFLINE CACHE — localStorage
+// ══════════════════════════════════════════════
+const CACHE_KEY = 'fc_userdata';
+const CACHE_USER_KEY = 'fc_user_profile';
+
+function saveLocalCache() {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(userData));
+    if (currentUser) {
+      localStorage.setItem(CACHE_USER_KEY, JSON.stringify({
+        uid:   currentUser.uid,
+        email: currentUser.email,
+        name:  userData.name || currentUser.email?.split('@')[0] || ''
+      }));
+    }
+  } catch(e) { console.warn('saveLocalCache:', e); }
+}
+
+function loadLocalCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    userData.name           = d.name           || '';
+    userData.movimientos    = d.movimientos    || [];
+    userData.budgets        = d.budgets        || {};
+    userData.customCats     = d.customCats     || null;
+    userData.customWallets  = d.customWallets  || null;
+    userData.walletInitials = d.walletInitials || {};
+    userData.metas          = d.metas          || [];
+    userData.tarjetas       = d.tarjetas       || [];
+    userData.sharedWith     = d.sharedWith     || {};
+    userData.deudas         = d.deudas         || [];
+    userData.pareja         = d.pareja         || {activo:false,email:'',nombre:''};
+    return true;
+  } catch(e) { return false; }
+}
+
+function getCachedUser() {
+  try {
+    const raw = localStorage.getItem(CACHE_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function isOnline() {
+  return navigator.onLine;
+}
+
+// ══════════════════════════════════════════════
+//  FIRESTORE LOAD/SAVE
+// ══════════════════════════════════════════════
+async function loadFromFirestore() {
+  if (!currentUser) return;
+  // Cargar cache local primero (respuesta inmediata)
+  loadLocalCache();
+  // Si hay internet, sincronizar con Firebase en background
+  if (!isOnline()) return;
+  try {
+    const d = await fsGet('users', currentUser.uid);
+    if (d) {
+      userData.name           = d.name           || currentUser.email?.split('@')[0] || '';
+      userData.movimientos    = d.movimientos    || [];
+      userData.budgets        = d.budgets        || {};
+      userData.customCats     = d.customCats     || null;
+      userData.customWallets  = d.customWallets  || null;
+      userData.walletInitials = d.walletInitials || {};
+      userData.metas          = d.metas          || [];
+      userData.tarjetas       = d.tarjetas       || [];
+      userData.sharedWith     = d.sharedWith     || {};
+      userData.deudas         = d.deudas         || [];
+      userData.pareja         = d.pareja         || {activo:false,email:'',nombre:''};
+      saveLocalCache(); // actualizar cache con datos frescos de Firebase
+    }
+  } catch(e) {
+    console.warn('loadFromFirestore falló, usando cache local:', e);
+    // Ya cargamos el cache al principio, no hacer nada más
+  }
+}
+
+async function saveToFirestore() {
+  if (!currentUser) return;
+  // Guardar en localStorage SIEMPRE (funciona offline)
+  saveLocalCache();
+  // Sincronizar con Firebase solo si hay internet
+  if (!isOnline()) return;
+  try {
+    await fsSet('users', currentUser.uid, {
+      movimientos:    userData.movimientos   || [],
+      budgets:        userData.budgets       || {},
+      customCats:     userData.customCats,
+      customWallets:  userData.customWallets,
+      walletInitials: userData.walletInitials|| {},
+      metas:          userData.metas         || [],
+      tarjetas:       userData.tarjetas      || [],
+      sharedWith:     userData.sharedWith    || {},
+      deudas:         userData.deudas        || [],
+      pareja:         userData.pareja        || {activo:false,email:'',nombre:''},
+      email:          currentUser.email
+    });
     enviarBackupSheets().catch(()=>{});
-  } catch(e) { console.error('saveToFirestore:', e); }
+  } catch(e) { console.warn('saveToFirestore falló, datos guardados localmente:', e); }
 }
 
 async function enviarBackupSheets() {
@@ -3147,6 +3249,23 @@ async function setPromosWorkerUrl(url) {
 async function handleAuthUser(user) {
   if (!user) { showAuthScreen(); return; }
   currentUser = user;
+
+  // ── Sin internet: usar cache local ───────────
+  if (!isOnline()) {
+    const cached = loadLocalCache();
+    if (cached) {
+      launchApp();
+      showToast('📴 Modo sin conexión — usando datos locales');
+      return;
+    }
+    // Sin cache y sin internet — no puede entrar
+    showAuthScreen();
+    const errEl = document.getElementById('login-error');
+    if (errEl) errEl.textContent = 'Sin conexión. Abrí la app al menos una vez con internet.';
+    return;
+  }
+
+  // ── Con internet: verificar en Firebase ──────
   try {
     let data = await fsGet('users', user.uid);
     if (!data) {
@@ -3173,6 +3292,13 @@ async function handleAuthUser(user) {
     }
   } catch(e) {
     console.error('handleAuthUser:', e);
+    // Si Firebase falla pero hay cache, entrar igual
+    const cached = loadLocalCache();
+    if (cached) {
+      launchApp();
+      showToast('⚠️ Sin conexión con servidor — usando datos locales');
+      return;
+    }
     if (user.email === ADMIN_EMAIL) { launchApp(); return; }
     showAuthScreen();
   }
