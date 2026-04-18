@@ -4456,11 +4456,9 @@ async function importCSV(input) {
 // ══════════════════════════════════════════════
 //  NOTIFICACIONES
 // ══════════════════════════════════════════════
-function getNotifications(){const today=new Date(),todayStr=today.toISOString().split('T')[0];const notifs=[];(userData.movimientos||[]).filter(t=>t.estado==='Pendiente'&&t.fecha<todayStr).forEach(t=>{const dias=Math.floor((today-new Date(t.fecha+'T12:00:00'))/86400000);notifs.push({type:dias>7?'danger':'warn',title:`⏰ Vencido: ${t.concepto}`,desc:`Hace ${dias} día${dias>1?'s':''} · ${fmtARS(t.importe)}`,id:t.id});});const in7=new Date(today);in7.setDate(in7.getDate()+7);const in7Str=in7.toISOString().split('T')[0];(userData.movimientos||[]).filter(t=>t.estado==='Pendiente'&&t.fecha>=todayStr&&t.fecha<=in7Str).forEach(t=>{const dias=Math.ceil((new Date(t.fecha+'T12:00:00')-today)/86400000);notifs.push({type:'info',title:`📅 Próximo: ${t.concepto}`,desc:`En ${dias} día${dias!==1?'s':''} · ${fmtARS(t.importe)}`,id:t.id});});return notifs;}
+function getNotifications(){ return window._flowcashNotifs || []; }
 function updateNotifBadge(){const n=getNotifications().length;const b=document.getElementById('notif-badge');if(b){b.style.display=n>0?'flex':'none';b.textContent=n>9?'9+':n;}}
-function openNotifPanel(){const notifs=getNotifications();const el=document.getElementById('notif-list');if(el)el.innerHTML=notifs.length?notifs.map(n=>`<div class="notif-item ${n.type}" ${n.id?`onclick="closeNotifPanel();marcarPagado(${n.id})" style="cursor:pointer"`:''} ><div class="notif-title">${n.title}</div><div class="notif-desc">${n.desc}</div></div>`).join(''):'<div style="text-align:center;padding:30px;color:var(--text3)">✅ Todo al día</div>';document.getElementById('notif-panel').classList.add('open');document.getElementById('notif-overlay').classList.add('open');}
-function closeNotifPanel(){document.getElementById('notif-panel').classList.remove('open');document.getElementById('notif-overlay').classList.remove('open');}
-
+function updateNotifBadge(){const n=getNotifications().length;const b=document.getElementById('notif-badge');if(b){b.style.display=n>0?'flex':'none';b.textContent=n>9?'9+':n;}}
 // ══════════════════════════════════════════════
 //  DOLAR
 // ══════════════════════════════════════════════
@@ -5343,34 +5341,46 @@ function getNotifications() {
   return window._flowcashNotifs || [];
 }
 
-function updateNotifBadge(count) {
-  const badge = document.getElementById('notif-badge');
-  if (badge) {
-    badge.textContent = count;
-    badge.style.display = count > 0 ? 'flex' : 'none';
-  }
-}
-
-async function openNotifPanel() {
-  const notifs = getNotifications();
+function openNotifPanel() {
+  // Mostrar panel inmediatamente con lo que hay en memoria
   const panel = document.getElementById('notif-panel');
   if (!panel) return;
-
-  // Re-check notifications before showing panel
-  await checkNotificaciones();
-  const notifs2 = getNotifications();
-  panel.innerHTML = notifs2.length ? notifs2.map(n => `
-    <div style="padding:12px;background:${n.urgente?'rgba(248,113,113,0.08)':'var(--surface2)'};border:1px solid ${n.urgente?'rgba(248,113,113,0.3)':'var(--border)'};border-radius:var(--radius-sm);margin-bottom:8px">
-      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">${n.titulo}</div>
-      <div style="font-size:12px;color:var(--text2)">${n.mensaje}</div>
+  const notifs = getNotifications();
+  const lista = panel.querySelector('#notif-list') || panel;
+  const contenido = notifs.length ? notifs.map(n => `
+    <div style="padding:12px;background:${n.urgente?'rgba(248,113,113,0.08)':'var(--surface2)'};border:1px solid ${n.urgente?'rgba(248,113,113,0.3)':'var(--border)'};border-radius:var(--radius-sm);margin-bottom:8px;cursor:${n.id?'pointer':'default'}" ${n.id?`onclick="closeNotifPanel();marcarPagado(${n.id})"`:''}>
+      <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">${n.titulo||n.title||''}</div>
+      <div style="font-size:12px;color:var(--text2)">${n.mensaje||n.desc||''}</div>
     </div>`).join('')
   : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px">Sin notificaciones pendientes ✅<br><br><span style="font-size:11px">Las alertas aparecen cuando tenés pagos por vencer, presupuesto al límite o sin cargar gastos hace 5+ días.</span></div>';
 
+  // Intentar renderizar en notif-list si existe, sino en el panel directo
+  const listEl = document.getElementById('notif-list');
+  if (listEl) listEl.innerHTML = contenido;
+  else panel.innerHTML = '<div class="panel-title">🔔 Notificaciones <button class="panel-close" onclick="closeNotifPanel()">✕</button></div>' + contenido;
+
   document.getElementById('notif-overlay').classList.add('open');
+  panel.classList.add('open');
+
+  // Actualizar en background sin congelar
+  checkNotificaciones().then(() => {
+    const notifs2 = getNotifications();
+    const listEl2 = document.getElementById('notif-list');
+    if (listEl2 && notifs2.length !== notifs.length) {
+      listEl2.innerHTML = notifs2.length ? notifs2.map(n => `
+        <div style="padding:12px;background:${n.urgente?'rgba(248,113,113,0.08)':'var(--surface2)'};border:1px solid ${n.urgente?'rgba(248,113,113,0.3)':'var(--border)'};border-radius:var(--radius-sm);margin-bottom:8px">
+          <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:4px">${n.titulo||n.title||''}</div>
+          <div style="font-size:12px;color:var(--text2)">${n.mensaje||n.desc||''}</div>
+        </div>`).join('') : '<div style="font-size:13px;color:var(--text3);text-align:center;padding:20px">Sin notificaciones pendientes ✅</div>';
+    }
+  }).catch(()=>{});
 }
 
 function closeNotifPanel() {
-  document.getElementById('notif-overlay').classList.remove('open');
+  const panel = document.getElementById('notif-panel');
+  if (panel) panel.classList.remove('open');
+  const overlay = document.getElementById('notif-overlay');
+  if (overlay) overlay.classList.remove('open');
 }
 
 // Check admin notifications (new user registrations)
