@@ -1,13 +1,12 @@
 {
-  "name": "FlowCash — Finanzas Personales",
+  "name": "FlowCash",
   "short_name": "FlowCash",
-  "description": "Administrá tus finanzas personales de forma inteligente",
+  "description": "Finanzas personales para Argentina",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
-  "lang": "es-AR",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -24,42 +23,32 @@
   ],
   "shortcuts": [
     {
-      "name": "➕ Nuevo movimiento",
-      "short_name": "Nuevo gasto",
-      "description": "Agregar un movimiento rápidamente",
-      "url": "/?action=new",
-      "icons": [
-        {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
+      "name": "Nuevo gasto",
+      "short_name": "Gasto",
+      "description": "Cargar un gasto rápido",
+      "url": "/?nuevo=gasto",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "📊 Dashboard",
-      "short_name": "Dashboard",
-      "url": "/",
-      "icons": [
-        {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
+      "name": "Nuevo ingreso",
+      "short_name": "Ingreso",
+      "description": "Registrar un ingreso",
+      "url": "/?nuevo=ingreso",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "🛒 Supermercados",
-      "short_name": "Promos",
-      "url": "/?view=supermercados",
-      "icons": [
-        {
-          "src": "/icon-192.png",
-          "sizes": "192x192"
-        }
-      ]
+      "name": "Escanear ticket",
+      "short_name": "Ticket",
+      "description": "Escanear ticket con la cámara",
+      "url": "/?view=ticket",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Asesor IA",
+      "short_name": "Asesor",
+      "description": "Chat con el asesor financiero",
+      "url": "/?view=asesor",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
-  ],
-  "categories": [
-    "finance",
-    "productivity"
   ]
 }
