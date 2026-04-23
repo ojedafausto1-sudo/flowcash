@@ -4927,33 +4927,82 @@ let reconocimientoVoz = null;
 function iniciarGastoVoz() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    showToast('⚠️ Tu navegador no soporta entrada por voz');
+    showToast('⚠️ Tu navegador no soporta entrada por voz. Usá Chrome.');
+    return;
+  }
+  // Verificar contexto seguro (HTTPS)
+  if (!window.isSecureContext) {
+    showToast('⚠️ La voz necesita HTTPS');
     return;
   }
   const btn = document.querySelector('.tile-voice');
   if (btn?.classList.contains('listening')) {
-    reconocimientoVoz?.stop();
+    try { reconocimientoVoz?.stop(); } catch(e) {}
     return;
   }
-  reconocimientoVoz = new SR();
-  reconocimientoVoz.lang = 'es-AR';
-  reconocimientoVoz.continuous = false;
-  reconocimientoVoz.interimResults = false;
-  if (btn) btn.classList.add('listening');
-  showToast('🎤 Escuchando... decí algo como "Gasté 3500 en comida"');
-  reconocimientoVoz.onresult = async (e) => {
-    const texto = e.results[0][0].transcript;
+  // Pedir permiso de micrófono primero
+  if (navigator.mediaDevices?.getUserMedia) {
+    navigator.mediaDevices.getUserMedia({audio: true})
+      .then(stream => {
+        // Cerrar el stream, solo queríamos el permiso
+        stream.getTracks().forEach(t => t.stop());
+        arrancarReconocimiento(SR, btn);
+      })
+      .catch(err => {
+        showToast('🎤 Tenés que permitir el micrófono en el navegador');
+        console.warn('Mic permission denied:', err);
+      });
+  } else {
+    arrancarReconocimiento(SR, btn);
+  }
+}
+
+function arrancarReconocimiento(SR, btn) {
+  try {
+    reconocimientoVoz = new SR();
+    reconocimientoVoz.lang = 'es-AR';
+    reconocimientoVoz.continuous = false;
+    reconocimientoVoz.interimResults = false;
+    reconocimientoVoz.maxAlternatives = 1;
+    if (btn) btn.classList.add('listening');
+    showToast('🎤 Escuchando... decí "Gasté 3500 en comida"');
+
+    reconocimientoVoz.onresult = async (e) => {
+      const texto = e.results[0][0].transcript;
+      if (btn) btn.classList.remove('listening');
+      if (texto && texto.trim()) {
+        await procesarGastoVoz(texto);
+      } else {
+        showToast('❌ No se escuchó nada, probá de nuevo');
+      }
+    };
+
+    reconocimientoVoz.onerror = (e) => {
+      if (btn) btn.classList.remove('listening');
+      const mensajes = {
+        'no-speech':     '🔇 No se escuchó nada. Hablá más fuerte.',
+        'aborted':       'Grabación cancelada',
+        'audio-capture': '🎤 No se detecta el micrófono',
+        'not-allowed':   '🚫 Permiso de micrófono denegado. Habilitalo en el navegador.',
+        'network':       '🌐 Sin internet — la voz necesita conexión',
+        'language-not-supported': 'El idioma no está disponible en tu dispositivo',
+        'service-not-allowed':    'Servicio de voz no disponible'
+      };
+      const msg = mensajes[e.error] || ('❌ ' + e.error);
+      showToast(msg);
+      console.warn('Speech error:', e.error);
+    };
+
+    reconocimientoVoz.onend = () => {
+      if (btn) btn.classList.remove('listening');
+    };
+
+    reconocimientoVoz.start();
+  } catch(e) {
     if (btn) btn.classList.remove('listening');
-    await procesarGastoVoz(texto);
-  };
-  reconocimientoVoz.onerror = () => {
-    if (btn) btn.classList.remove('listening');
-    showToast('❌ No se pudo reconocer la voz');
-  };
-  reconocimientoVoz.onend = () => {
-    if (btn) btn.classList.remove('listening');
-  };
-  reconocimientoVoz.start();
+    showToast('❌ Error al iniciar la voz');
+    console.error(e);
+  }
 }
 
 async function procesarGastoVoz(texto) {
