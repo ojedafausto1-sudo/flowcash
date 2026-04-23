@@ -805,6 +805,68 @@ body {
   .modal-overlay { align-items: center; }
   .modal { border-radius: var(--radius-lg) !important; max-width: 520px !important; }
 }
+/* ── QUICK TILES DASHBOARD ────────────────── */
+.quick-tiles {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+@media (max-width: 700px) {
+  .quick-tiles { grid-template-columns: repeat(3, 1fr); }
+}
+.quick-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text2);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.quick-tile:hover {
+  background: var(--surface2);
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.quick-tile:active { transform: translateY(0); }
+.quick-tile-emoji { font-size: 24px; line-height: 1; }
+.quick-tile-label {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.quick-tile.tile-ingreso {
+  background: rgba(74,222,128,0.08);
+  border-color: rgba(74,222,128,0.3);
+  color: var(--green);
+}
+.quick-tile.tile-ingreso:hover { border-color: var(--green); }
+.quick-tile.tile-voice {
+  background: rgba(167,139,250,0.08);
+  border-color: rgba(167,139,250,0.3);
+  color: var(--purple);
+}
+.quick-tile.tile-voice:hover { border-color: var(--purple); }
+.quick-tile.tile-voice.listening {
+  animation: pulseVoice 1.2s ease-in-out infinite;
+  border-color: var(--red);
+  color: var(--red);
+}
+@keyframes pulseVoice {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5); }
+  50%      { box-shadow: 0 0 0 10px rgba(248,113,113,0); }
+}
+
 /* ── MODAL NUEVO MOVIMIENTO — REDISEÑO ─────── */
 .modal-nuevo {
   padding: 16px 16px 32px !important;
@@ -1977,8 +2039,40 @@ body {
               <span class="period-label" id="period-label">Marzo 2026</span>
               <button class="period-btn" onclick="changePeriod(1)">›</button>
             </div>
-            <button class="btn-new" onclick="openModal()">+ Nuevo</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn-secondary" style="padding:8px 10px;font-size:13px" onclick="openModalRapido()" title="Carga rápida de varios gastos">⚡</button>
+              <button class="btn-new" onclick="openModal()">+ Nuevo</button>
+            </div>
           </div>
+
+          <!-- Tiles rápidos -->
+          <div class="quick-tiles">
+            <button class="quick-tile" onclick="abrirModalRapido('Gasto','Comida')">
+              <span class="quick-tile-emoji">🍔</span>
+              <span class="quick-tile-label">Comida</span>
+            </button>
+            <button class="quick-tile" onclick="abrirModalRapido('Gasto','Transporte')">
+              <span class="quick-tile-emoji">🚌</span>
+              <span class="quick-tile-label">Transporte</span>
+            </button>
+            <button class="quick-tile" onclick="abrirModalRapido('Gasto','Salidas')">
+              <span class="quick-tile-emoji">🎉</span>
+              <span class="quick-tile-label">Salidas</span>
+            </button>
+            <button class="quick-tile" onclick="abrirModalRapido('Gasto','Gastos hormiga')">
+              <span class="quick-tile-emoji">🐜</span>
+              <span class="quick-tile-label">Hormiga</span>
+            </button>
+            <button class="quick-tile tile-ingreso" onclick="abrirModalRapido('Ingreso','Ingreso')">
+              <span class="quick-tile-emoji">💵</span>
+              <span class="quick-tile-label">Ingreso</span>
+            </button>
+            <button class="quick-tile tile-voice" onclick="iniciarGastoVoz()">
+              <span class="quick-tile-emoji">🎤</span>
+              <span class="quick-tile-label">Por voz</span>
+            </button>
+          </div>
+
           <div id="proj-banner" style="display:none" class="proj-banner">🔮 Proyección estimada para este período</div>
           <div class="stats-grid" id="stats-grid"></div>
           <div class="charts-grid">
@@ -2283,19 +2377,24 @@ body {
         <!-- ESCANEAR TICKET -->
         <div id="view-ticket" class="view">
           <div class="view-header">
-            <span class="view-title">📷 Escanear ticket</span>
+            <span class="view-title">📷 Escanear ticket o resumen</span>
           </div>
           <div class="card" style="margin-bottom:14px">
-            <div class="card-header"><span class="card-title">Cargar imagen del ticket</span></div>
-            <p style="font-size:13px;color:var(--text3);margin-bottom:14px;line-height:1.6">Sacá una foto o subí una imagen de tu ticket/factura y la IA extrae los gastos automáticamente.</p>
+            <div class="card-header"><span class="card-title">Subir imagen o PDF</span></div>
+            <p style="font-size:13px;color:var(--text3);margin-bottom:14px;line-height:1.6">Sacá foto de tu ticket, factura o resumen de tarjeta. También podés subir un PDF (resumen bancario, extracto) y la IA extrae los movimientos automáticamente.</p>
             <div id="ticket-drop-zone" style="border:2px dashed var(--border);border-radius:var(--radius);padding:32px;text-align:center;cursor:pointer;transition:border-color 0.2s" onclick="document.getElementById('ticket-file-input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--accent)'" ondragleave="this.style.borderColor='var(--border)'" ondrop="handleTicketDrop(event)">
               <div style="font-size:40px;margin-bottom:10px">📸</div>
-              <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">Tocá para seleccionar imagen</div>
-              <div style="font-size:12px;color:var(--text3)">JPG, PNG — o arrastrá aquí</div>
-              <input type="file" id="ticket-file-input" accept="image/*" capture="environment" style="display:none" onchange="procesarTicket(this.files[0])">
+              <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">Tocá para subir archivo</div>
+              <div style="font-size:12px;color:var(--text3)">JPG, PNG, PDF — o arrastrá aquí</div>
+              <input type="file" id="ticket-file-input" accept="image/*,application/pdf" capture="environment" style="display:none" onchange="procesarTicket(this.files[0])">
             </div>
             <div id="ticket-preview" style="display:none;margin-top:14px">
-              <img id="ticket-img" style="max-width:100%;border-radius:var(--radius-sm);border:1px solid var(--border)" alt="Ticket">
+              <img id="ticket-img" style="max-width:100%;border-radius:var(--radius-sm);border:1px solid var(--border);display:none" alt="Ticket">
+              <div id="ticket-pdf-info" style="display:none;padding:20px;background:var(--surface2);border-radius:var(--radius-sm);border:1px solid var(--border);text-align:center">
+                <div style="font-size:40px;margin-bottom:8px">📄</div>
+                <div style="font-size:13px;font-weight:700;color:var(--text)" id="ticket-pdf-name">documento.pdf</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:4px" id="ticket-pdf-size"></div>
+              </div>
               <div style="margin-top:10px;display:flex;gap:8px">
                 <button class="btn-new" style="flex:1" onclick="analizarTicketIA()" id="ticket-analizar-btn">🤖 Analizar con IA</button>
                 <button class="btn-secondary" onclick="limpiarTicket()">✕ Limpiar</button>
@@ -2544,6 +2643,29 @@ body {
   </div>
 
 </div><!-- /app -->
+
+<!-- Modal carga rápida (bulk) -->
+<div class="modal-overlay" id="modal-rapido-overlay" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal modal-nuevo">
+    <div class="modal-handle"></div>
+    <div class="mov-header">
+      <button class="mov-header-btn" onclick="document.getElementById('modal-rapido-overlay').classList.remove('open')">Cerrar</button>
+      <div class="mov-header-title">⚡ Carga rápida</div>
+      <button class="mov-header-btn mov-header-save" onclick="guardarBulk()" id="bulk-save-btn">Guardar todo</button>
+    </div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:14px;padding:0 4px">Cargá varios gastos del día sin llenar tantos campos. Se asume fecha de hoy y la billetera por defecto.</p>
+
+    <div class="mform-group">
+      <label class="mform-label">Billetera por defecto</label>
+      <select id="bulk-wallet" class="mform-select"></select>
+    </div>
+
+    <div id="bulk-list" style="margin:14px 0"></div>
+    <button class="btn-secondary" onclick="addBulkRow()" style="width:100%;margin-bottom:10px">+ Agregar otro gasto</button>
+
+    <div id="bulk-total" style="text-align:center;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);margin-top:10px;font-family:var(--mono);font-weight:700"></div>
+  </div>
+</div>
 
 <!-- Profile dropdown -->
 <div class="dropdown" id="profile-menu">
@@ -3572,7 +3694,29 @@ function launchApp() {
   });
   // Handle URL shortcuts
   const _params = new URLSearchParams(window.location.search);
-  if (_params.get('action') === 'new') setTimeout(openModal, 600);
+  const _nuevo  = _params.get('nuevo') || _params.get('action'); // gasto|ingreso|ahorro|transferencia|new
+  if (_nuevo) {
+    setTimeout(() => {
+      openModal();
+      // Pre-seleccionar tipo si se especificó
+      const mapa = {
+        gasto:'Gasto', ingreso:'Ingreso', ahorro:'Ahorro',
+        transferencia:'Transferencia', transfer:'Transferencia', new:'Gasto'
+      };
+      const tipo = mapa[_nuevo.toLowerCase()] || 'Gasto';
+      const btn = document.querySelector(`[data-tipo="${tipo}"]`);
+      if (btn) setTipo(tipo, btn);
+      // Pre-categoría si viene en URL
+      const cat = _params.get('cat');
+      if (cat) setTimeout(() => {
+        const sel = document.getElementById('m-categoria');
+        if (sel) {
+          const opt = [...sel.options].find(o => o.value.toLowerCase() === cat.toLowerCase());
+          if (opt) sel.value = opt.value;
+        }
+      }, 100);
+    }, 600);
+  }
   if (_params.get('view')) setTimeout(() => showView(_params.get('view')), 400);
 }
 
@@ -4684,6 +4828,183 @@ function closeThemePanel(){document.getElementById('theme-panel').classList.remo
 // ══════════════════════════════════════════════
 //  MODAL MOVIMIENTO
 // ══════════════════════════════════════════════
+function openModalRapido() {
+  const wSel = document.getElementById('bulk-wallet');
+  if (wSel) {
+    wSel.innerHTML = getUserWallets().map(w => `<option value="${w}">${w}</option>`).join('');
+  }
+  document.getElementById('bulk-list').innerHTML = '';
+  addBulkRow();
+  addBulkRow();
+  addBulkRow();
+  document.getElementById('modal-rapido-overlay').classList.add('open');
+}
+
+function addBulkRow() {
+  const lista = document.getElementById('bulk-list');
+  if (!lista) return;
+  const i = lista.children.length;
+  const cats = getUserCats();
+  const row = document.createElement('div');
+  row.className = 'bulk-row';
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px;align-items:center';
+  row.innerHTML = `
+    <input type="text" class="mform-input bulk-concepto" placeholder="¿Qué?" style="flex:2;min-width:0;padding:8px 10px;font-size:13px" oninput="updateBulkTotal()">
+    <input type="number" class="mform-input bulk-monto" placeholder="0" inputmode="numeric" style="flex:1;min-width:0;padding:8px 10px;font-size:13px;text-align:right" oninput="updateBulkTotal()">
+    <select class="mform-select bulk-cat" style="flex:1;min-width:0;padding:8px 10px;font-size:12px">
+      ${cats.map(c => `<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <button class="btn-danger" style="padding:6px 8px;font-size:11px" onclick="this.parentElement.remove();updateBulkTotal()">✕</button>
+  `;
+  lista.appendChild(row);
+}
+
+function updateBulkTotal() {
+  const rows = document.querySelectorAll('#bulk-list .bulk-row');
+  let total = 0, count = 0;
+  rows.forEach(r => {
+    const m = parseFloat(r.querySelector('.bulk-monto').value) || 0;
+    if (m > 0) { total += m; count++; }
+  });
+  const el = document.getElementById('bulk-total');
+  if (el) {
+    el.textContent = count > 0
+      ? `${count} gasto${count>1?'s':''} · Total: ${fmtARS(total)}`
+      : 'Cargá al menos un gasto';
+    el.style.color = count > 0 ? 'var(--red)' : 'var(--text3)';
+  }
+}
+
+async function guardarBulk() {
+  const rows = document.querySelectorAll('#bulk-list .bulk-row');
+  const wallet = document.getElementById('bulk-wallet').value;
+  const hoy = new Date().toISOString().split('T')[0];
+  const nuevos = [];
+  rows.forEach((r, i) => {
+    const concepto = r.querySelector('.bulk-concepto').value.trim();
+    const importe  = parseFloat(r.querySelector('.bulk-monto').value) || 0;
+    const categoria = r.querySelector('.bulk-cat').value;
+    if (!concepto || importe <= 0) return;
+    nuevos.push({
+      id: Date.now() + i,
+      fecha: hoy, tipo: 'Gasto',
+      concepto, categoria, billetera: wallet,
+      importe: Math.abs(importe),
+      estado: 'Pagado'
+    });
+  });
+  if (!nuevos.length) { showToast('Cargá al menos un gasto válido'); return; }
+  userData.movimientos = (userData.movimientos || []).concat(nuevos);
+  document.getElementById('modal-rapido-overlay').classList.remove('open');
+  renderAll(); updateNotifBadge();
+  saveToFirestore()
+    .then(() => showToast(`✅ ${nuevos.length} gasto${nuevos.length>1?'s':''} guardado${nuevos.length>1?'s':''}`))
+    .catch(() => showToast(`✅ ${nuevos.length} guardados localmente`));
+}
+
+function abrirModalRapido(tipo, categoria) {
+  openModal();
+  setTimeout(() => {
+    const btn = document.querySelector(`[data-tipo="${tipo}"]`);
+    if (btn) setTipo(tipo, btn);
+    if (categoria) {
+      const sel = document.getElementById('m-categoria');
+      if (sel) {
+        const opt = [...sel.options].find(o => o.value === categoria);
+        if (opt) sel.value = categoria;
+      }
+    }
+    // Foco directo en el importe
+    setTimeout(() => {
+      const imp = document.getElementById('m-importe');
+      if (imp) imp.focus();
+    }, 150);
+  }, 80);
+}
+
+// ── ENTRADA POR VOZ ────────────────────────
+let reconocimientoVoz = null;
+function iniciarGastoVoz() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast('⚠️ Tu navegador no soporta entrada por voz');
+    return;
+  }
+  const btn = document.querySelector('.tile-voice');
+  if (btn?.classList.contains('listening')) {
+    reconocimientoVoz?.stop();
+    return;
+  }
+  reconocimientoVoz = new SR();
+  reconocimientoVoz.lang = 'es-AR';
+  reconocimientoVoz.continuous = false;
+  reconocimientoVoz.interimResults = false;
+  if (btn) btn.classList.add('listening');
+  showToast('🎤 Escuchando... decí algo como "Gasté 3500 en comida"');
+  reconocimientoVoz.onresult = async (e) => {
+    const texto = e.results[0][0].transcript;
+    if (btn) btn.classList.remove('listening');
+    await procesarGastoVoz(texto);
+  };
+  reconocimientoVoz.onerror = () => {
+    if (btn) btn.classList.remove('listening');
+    showToast('❌ No se pudo reconocer la voz');
+  };
+  reconocimientoVoz.onend = () => {
+    if (btn) btn.classList.remove('listening');
+  };
+  reconocimientoVoz.start();
+}
+
+async function procesarGastoVoz(texto) {
+  if (!texto || !texto.trim()) return;
+  showToast('🤖 Interpretando "' + texto + '"...');
+  try {
+    const response = await fetch(PROMOS_WORKER_URL.replace(/\/$/, '') + '/ia', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 500,
+        messages: [{
+          role: 'user',
+          content: `El usuario dijo por voz: "${texto}". Extraé un movimiento financiero y respondé SOLO con JSON válido sin markdown, sin backticks, sin texto extra. Formato:
+{"tipo":"Gasto","importe":1234,"concepto":"descripción corta","categoria":"Comida"}
+Tipo puede ser: Gasto, Ingreso, Ahorro, Transferencia.
+Categorías: Comida, Ropa, Medico, Mascotas, Vivienda, Suscripciones, Transporte, Estetica, Regalos, Personal, Estudios, Tecnología, Automotor, Telefono, Juegos, Salidas, Cocina, Gastos hormiga, Deporte, Viajes, Ahorro, Ingreso.
+Si no entendés, devolvé {"error":"..."}.`
+        }]
+      })
+    });
+    const data = await response.json();
+    const out = data.content?.[0]?.text || '{}';
+    let parsed;
+    try { parsed = JSON.parse(out.replace(/```json|```/g,'').trim()); }
+    catch(e) { showToast('❌ No se pudo interpretar'); return; }
+    if (parsed.error || !parsed.importe) {
+      showToast('❌ ' + (parsed.error || 'No se detectó un monto'));
+      return;
+    }
+    // Abrir modal con datos precargados
+    openModal();
+    setTimeout(() => {
+      const tipoBtn = document.querySelector(`[data-tipo="${parsed.tipo||'Gasto'}"]`);
+      if (tipoBtn) setTipo(parsed.tipo||'Gasto', tipoBtn);
+      document.getElementById('m-importe').value = parsed.importe;
+      document.getElementById('m-concepto').value = parsed.concepto || texto;
+      const sel = document.getElementById('m-categoria');
+      if (sel && parsed.categoria) {
+        const opt = [...sel.options].find(o => o.value === parsed.categoria);
+        if (opt) sel.value = parsed.categoria;
+      }
+      showToast('✅ Revisá y tocá Guardar');
+    }, 150);
+  } catch(e) {
+    showToast('❌ Error de conexión');
+    console.error(e);
+  }
+}
+
 function openModal(){
   document.getElementById('modal-editing-id').value='';
   document.getElementById('modal-title').textContent='Nuevo';
@@ -5989,9 +6310,11 @@ async function enviarMensajeAsesor() {
 }
 
 // ══════════════════════════════════════════════
-//  ESCANEAR TICKET
+//  ESCANEAR TICKET / PDF
 // ══════════════════════════════════════════════
 let ticketImageBase64    = null;
+let ticketPdfBase64      = null;
+let ticketFileType       = null; // 'image' | 'pdf'
 let ticketItemsDetectados = [];
 
 function initTicket() {}
@@ -6000,16 +6323,45 @@ function handleTicketDrop(e) {
   e.preventDefault();
   document.getElementById('ticket-drop-zone').style.borderColor = 'var(--border)';
   const file = e.dataTransfer.files[0];
-  if (file && file.type.startsWith('image/')) procesarTicket(file);
+  if (file) procesarTicket(file);
 }
 
 function procesarTicket(file) {
   if (!file) return;
+  const esPdf = file.type === 'application/pdf' || file.name?.toLowerCase().endsWith('.pdf');
+  const esImg = file.type?.startsWith('image/');
+  if (!esPdf && !esImg) { showToast('❌ Solo imágenes o PDF'); return; }
+
+  // Límite razonable: 10 MB para PDFs, sino la API lo rechaza
+  if (file.size > 10 * 1024 * 1024) {
+    showToast('⚠️ El archivo es muy grande (máx 10 MB)');
+    return;
+  }
+
   const reader = new FileReader();
   reader.onload = e => {
-    ticketImageBase64 = e.target.result.split(',')[1];
-    const img = document.getElementById('ticket-img');
-    if (img) img.src = e.target.result;
+    const base64 = e.target.result.split(',')[1];
+    const imgEl = document.getElementById('ticket-img');
+    const pdfInfo = document.getElementById('ticket-pdf-info');
+
+    if (esPdf) {
+      ticketPdfBase64 = base64;
+      ticketImageBase64 = null;
+      ticketFileType = 'pdf';
+      if (imgEl) imgEl.style.display = 'none';
+      if (pdfInfo) {
+        pdfInfo.style.display = '';
+        document.getElementById('ticket-pdf-name').textContent = file.name || 'documento.pdf';
+        const kb = Math.round(file.size / 1024);
+        document.getElementById('ticket-pdf-size').textContent = kb > 1024 ? (kb/1024).toFixed(1)+' MB' : kb+' KB';
+      }
+    } else {
+      ticketImageBase64 = base64;
+      ticketPdfBase64 = null;
+      ticketFileType = 'image';
+      if (imgEl) { imgEl.src = e.target.result; imgEl.style.display = ''; }
+      if (pdfInfo) pdfInfo.style.display = 'none';
+    }
     document.getElementById('ticket-preview').style.display   = '';
     document.getElementById('ticket-resultado').style.display = 'none';
     document.getElementById('ticket-items-list').innerHTML    = '';
@@ -6019,6 +6371,8 @@ function procesarTicket(file) {
 
 function limpiarTicket() {
   ticketImageBase64     = null;
+  ticketPdfBase64       = null;
+  ticketFileType        = null;
   ticketItemsDetectados = [];
   document.getElementById('ticket-preview').style.display   = 'none';
   document.getElementById('ticket-resultado').style.display = 'none';
@@ -6026,26 +6380,38 @@ function limpiarTicket() {
 }
 
 async function analizarTicketIA() {
-  if (!ticketImageBase64) { showToast('Primero seleccioná una imagen'); return; }
+  if (!ticketImageBase64 && !ticketPdfBase64) { showToast('Primero seleccioná un archivo'); return; }
   const btn     = document.getElementById('ticket-analizar-btn');
   const loading = document.getElementById('ticket-loading');
   if (btn)     btn.disabled = true;
   if (loading) loading.style.display = '';
+
+  const prompt = ticketFileType === 'pdf'
+    ? `Analizá este documento (puede ser resumen de tarjeta, extracto bancario, ticket o factura) y extraé TODOS los movimientos de gasto que encuentres. Respondé SOLO con un JSON válido, sin texto extra, sin markdown, sin backticks. Formato exacto:
+{"items":[{"concepto":"descripción corta del movimiento","importe":1234.56,"categoria":"Comida","fecha":"2026-04-22"}]}
+Categorías disponibles: Comida, Ropa, Medico, Mascotas, Vivienda, Suscripciones, Transporte, Estetica, Regalos, Personal, Estudios, Tecnología, Automotor, Telefono, Juegos, Salidas, Cocina, Gastos hormiga.
+Los importes en pesos argentinos como número positivo. Si detectás fecha del movimiento, incluila como "fecha" en formato YYYY-MM-DD (sino omitila). Ignorá pagos recibidos, saldos, intereses financieros y filas de total. SOLO gastos concretos. Si no podés leer, devolvé {"items":[]}.`
+    : `Analizá este ticket/factura y extraé los gastos. Respondé SOLO con un JSON válido, sin texto extra, sin markdown, sin backticks. Formato exacto:
+{"items":[{"concepto":"nombre del producto/servicio","importe":1234.56,"categoria":"Comida"}]}
+Categorías disponibles: Comida, Ropa, Medico, Mascotas, Vivienda, Suscripciones, Transporte, Estetica, Regalos, Personal, Estudios, Tecnología, Automotor, Telefono, Juegos, Salidas, Cocina, Gastos hormiga.
+Si hay varios items, listalos todos. Los importes en pesos argentinos como número. Si es ticket de supermercado, podés agrupar por categoría. Si no podés leer el ticket, devolvé {"items":[]}.`;
+
+  const contentBlock = ticketFileType === 'pdf'
+    ? { type:'document', source:{ type:'base64', media_type:'application/pdf', data: ticketPdfBase64 } }
+    : { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: ticketImageBase64 } };
+
   try {
     const response = await fetch(PROMOS_WORKER_URL.replace(/\/$/, '') + '/ia', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
+        max_tokens: 4000,
         messages: [{
           role: 'user',
           content: [
-            { type:'image', source:{ type:'base64', media_type:'image/jpeg', data: ticketImageBase64 } },
-            { type:'text', text:`Analizá este ticket/factura y extraé los gastos. Respondé SOLO con un JSON válido, sin texto extra, sin markdown, sin backticks. Formato exacto:
-{"items":[{"concepto":"nombre del producto/servicio","importe":1234.56,"categoria":"Comida"}]}
-Categorías disponibles: Comida, Ropa, Medico, Mascotas, Vivienda, Suscripciones, Transporte, Estetica, Regalos, Personal, Estudios, Tecnología, Automotor, Telefono, Juegos, Salidas, Cocina, Gastos hormiga.
-Si hay varios items, listalos todos. Los importes en pesos argentinos como número. Si es ticket de supermercado, podés agrupar por categoría. Si no podés leer el ticket, devolvé {"items":[]}.` }
+            contentBlock,
+            { type:'text', text: prompt }
           ]
         }]
       })
@@ -6056,14 +6422,16 @@ Si hay varios items, listalos todos. Los importes en pesos argentinos como núme
     try { parsed = JSON.parse(text.replace(/```json|```/g,'').trim()); }
     catch(e) { parsed = {items:[]}; }
     ticketItemsDetectados = parsed.items || [];
-    if (!ticketItemsDetectados.length) { showToast('❌ No se detectaron gastos en la imagen'); return; }
+    if (!ticketItemsDetectados.length) { showToast('❌ No se detectaron gastos'); return; }
     const hoy     = new Date().toISOString().split('T')[0];
     const wallets = getUserWallets();
-    document.getElementById('ticket-items-list').innerHTML = ticketItemsDetectados.map((item,i) => `
+    document.getElementById('ticket-items-list').innerHTML = ticketItemsDetectados.map((item,i) => {
+      const fechaItem = item.fecha && /^\d{4}-\d{2}-\d{2}$/.test(item.fecha) ? item.fecha : hoy;
+      return `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2)" id="ticket-item-${i}">
         <div style="flex:1;min-width:0">
           <div style="font-size:13px;font-weight:600;color:var(--text)">${item.concepto}</div>
-          <div style="font-size:11px;color:var(--text3)">${item.categoria} · <input type="date" value="${hoy}" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:11px;cursor:pointer" id="ti-fecha-${i}"></div>
+          <div style="font-size:11px;color:var(--text3)">${item.categoria} · <input type="date" value="${fechaItem}" style="background:none;border:none;color:var(--text3);font-family:var(--font);font-size:11px;cursor:pointer" id="ti-fecha-${i}"></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           <select style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--font);font-size:11px;padding:3px 6px" id="ti-wallet-${i}">
@@ -6072,11 +6440,12 @@ Si hay varios items, listalos todos. Los importes en pesos argentinos como núme
           <span style="font-family:var(--mono);font-size:14px;font-weight:700;color:var(--red)">${fmtARS(item.importe)}</span>
           <button class="btn-secondary" style="padding:4px 8px;font-size:11px;color:var(--green)" onclick="importarItemTicket(${i})">+ Importar</button>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     document.getElementById('ticket-resultado').style.display = '';
-    showToast(`✅ ${ticketItemsDetectados.length} gasto${ticketItemsDetectados.length>1?'s':''} detectado${ticketItemsDetectados.length>1?'s':''}`);
+    showToast(`✅ ${ticketItemsDetectados.length} movimiento${ticketItemsDetectados.length>1?'s':''} detectado${ticketItemsDetectados.length>1?'s':''}`);
   } catch(e) {
-    showToast('❌ Error al analizar. Verificá la API key.');
+    showToast('❌ Error al analizar. Verificá la conexión.');
     console.error(e);
   } finally {
     if (loading) loading.style.display = 'none';
