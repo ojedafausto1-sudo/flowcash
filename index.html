@@ -806,6 +806,13 @@ body {
   .modal { border-radius: var(--radius-lg) !important; max-width: 520px !important; }
 }
 /* ── CATEGORY PICKER GRID ───────────────── */
+#cat-picker-overlay { z-index: 500 !important; }
+.mov-field-clickable {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: rgba(56,189,248,0.1);
+}
+.mov-field-clickable:active { background: var(--surface2); }
 .cat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -2863,9 +2870,9 @@ body {
         <input type="text" id="m-concepto" class="mov-field-input" placeholder="¿En qué?">
       </div>
 
-      <div class="mov-field-row" onclick="abrirCategoriaPicker()" style="cursor:pointer">
+      <div class="mov-field-row mov-field-clickable" onclick="event.stopPropagation();abrirCategoriaPicker()">
         <span class="mov-field-label">Categoría</span>
-        <div class="mov-field-input" id="m-categoria-display" style="text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:6px;cursor:pointer">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;color:var(--text);font-size:14px;font-weight:600;pointer-events:none">
           <span id="m-categoria-icono">🍔</span>
           <span id="m-categoria-text">Comida</span>
           <span style="color:var(--text3);font-size:10px">▾</span>
@@ -5024,11 +5031,20 @@ function abrirCategoriaPicker() {
   grid.innerHTML = cats.map(cat => {
     const icono = CAT_ICONS[cat] || '📦';
     const sel = cat === actual ? ' selected' : '';
-    return `<div class="cat-item${sel}" onclick="seleccionarCategoria('${cat.replace(/'/g, "\\'")}')">
+    const safe = cat.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return `<div class="cat-item${sel}" data-cat="${safe}">
       <span class="cat-item-icon">${icono}</span>
       <span class="cat-item-name">${cat}</span>
     </div>`;
   }).join('');
+  // Wire clicks via addEventListener (más confiable que onclick inline)
+  grid.querySelectorAll('.cat-item').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      seleccionarCategoria(el.dataset.cat);
+    });
+  });
   document.getElementById('cat-picker-overlay').classList.add('open');
 }
 
@@ -5037,10 +5053,14 @@ function cerrarCategoriaPicker() {
 }
 
 function seleccionarCategoria(cat) {
+  if (!cat) return;
   const icono = CAT_ICONS[cat] || '📦';
-  document.getElementById('m-categoria').value = cat;
-  document.getElementById('m-categoria-text').textContent = cat;
-  document.getElementById('m-categoria-icono').textContent = icono;
+  const hidden = document.getElementById('m-categoria');
+  const txt = document.getElementById('m-categoria-text');
+  const ico = document.getElementById('m-categoria-icono');
+  if (hidden) hidden.value = cat;
+  if (txt) txt.textContent = cat;
+  if (ico) ico.textContent = icono;
   cerrarCategoriaPicker();
 }
 
