@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlowCash — Tus finanzas, ordenadas por primera vez</title>
+<meta name="description" content="App de finanzas personales para argentinos. Dashboard con gráficos, metas de ahorro, asesor con IA, escaneo de tickets y promos del súper. Probala gratis.">
+<meta property="og:title" content="FlowCash — Tus finanzas, ordenadas">
+<meta property="og:description" content="La app de finanzas personales pensada para argentinos. Con IA, promos del súper y modo offline.">
+<meta property="og:type" content="website">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #fafaf7;
+  --bg2: #f3f2ed;
+  --ink: #0a0a0a;
+  --ink2: #2a2a2a;
+  --ink3: #6b6b6b;
+  --ink4: #9a9a9a;
+  --line: #e8e6e0;
+  --accent: #1e6b9e;
+  --accent-bright: #2dd4bf;
+  --accent-warm: #f4a261;
+  --green: #10b981;
+  --red: #ef4444;
+  --yellow: #f59e0b;
+  --serif: 'Instrument Serif', Georgia, serif;
+  --sans: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Grain texture overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.6;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+
+/* ─── NAV ──────────────────────── */
+.nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  padding: 18px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(250, 250, 247, 0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.3s;
+}
+.nav.scrolled { border-bottom-color: var(--line); }
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.5px;
+}
+.logo-mark {
+  width: 32px; height: 32px;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.nav-links {
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+.nav-links a {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink3);
+  transition: color 0.2s;
+}
+.nav-links a:hover { color: var(--ink); }
+
+.btn-cta {
+  background: var(--ink);
+  color: var(--bg);
+  padding: 10px 18px;
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 14px;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px -8px rgba(0,0,0,0.25);
+}
+.btn-cta-light {
+  background: white;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+@media (max-width: 768px) {
+  .nav { padding: 14px 18px; }
+  .nav-links { display: none; }
+}
+
+/* ─── HERO ──────────────────────── */
+.hero {
+  position: relative;
+  padding: 140px 32px 100px;
+  max-width: 1280px;
+  margin: 0 auto;
+  z-index: 2;
+}
+@media (max-width: 768px) {
+  .hero { padding: 110px 18px 60px; }
+}
+
+.hero-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 100px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink2);
+  margin-bottom: 24px;
+  font-feature-settings: "ss01";
+}
+.hero-eyebrow .dot {
+  width: 6px; height: 6px;
+  background: var(--green);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.hero-title {
+  font-family: var(--serif);
+  font-size: clamp(48px, 8vw, 120px);
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  margin-bottom: 28px;
+  max-width: 1100px;
+}
+.hero-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+.hero-title .strike {
+  position: relative;
+  color: var(--ink4);
+}
+.hero-title .strike::after {
+  content: '';
+  position: absolute;
+  left: -2%; right: -2%;
+  top: 52%;
+  height: 3px;
+  background: var(--red);
+  transform: rotate(-2deg);
+}
+
+.hero-sub {
+  font-size: clamp(18px, 2vw, 22px);
+  color: var(--ink3);
+  max-width: 620px;
+  line-height: 1.5;
+  margin-bottom: 40px;
+}
+.hero-sub strong { color: var(--ink); font-weight: 600; }
+
+.hero-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 60px;
+}
+.btn-primary-big {
+  background: var(--ink);
+  color: var(--bg);
+  padding: 18px 32px;
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.25s;
+}
+.btn-primary-big:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 18px 36px -10px rgba(0,0,0,0.3);
+}
+.btn-secondary-big {
+  padding: 18px 24px;
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--ink2);
+  border: 1px solid var(--line);
+  background: white;
+  transition: all 0.2s;
+}
+.btn-secondary-big:hover { border-color: var(--ink); }
+
+.hero-meta {
+  display: flex;
+  gap: 28px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--ink3);
+}
+.hero-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hero-meta-item::before {
+  content: '✓';
+  color: var(--green);
+  font-weight: 700;
+}
+
+/* ─── HERO VISUAL ──────────────── */
+.hero-visual {
+  position: relative;
+  margin-top: 80px;
+  height: 520px;
+  display: flex;
+  justify-content: center;
+  perspective: 1500px;
+}
+@media (max-width: 768px) {
+  .hero-visual { height: 420px; margin-top: 60px; }
+}
+
+.phone-mockup {
+  position: relative;
+  width: 320px;
+  height: 640px;
+  background: #1a1a2e;
+  border-radius: 44px;
+  padding: 14px;
+  box-shadow:
+    0 0 0 8px #2a2a3a,
+    0 80px 100px -20px rgba(0,0,0,0.4),
+    0 40px 60px -30px rgba(0,0,0,0.3);
+  transform: rotateY(-8deg) rotateX(2deg);
+  transition: transform 0.6s;
+}
+@media (max-width: 768px) {
+  .phone-mockup { width: 260px; height: 540px; }
+}
+.phone-screen {
+  width: 100%;
+  height: 100%;
+  background: #0f172a;
+  border-radius: 32px;
+  overflow: hidden;
+  position: relative;
+  font-family: var(--sans);
+  color: white;
+  padding: 20px 16px;
+}
+.phone-notch {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90px;
+  height: 22px;
+  background: #000;
+  border-radius: 100px;
+  z-index: 10;
+}
+
+.mock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 28px 0 24px;
+  font-size: 14px;
+}
+.mock-period {
+  font-weight: 600;
+  font-size: 13px;
+}
+.mock-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.mock-card {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.mock-card-label {
+  font-size: 9px;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.mock-card-value {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+}
+.mock-card-value.green { color: #4ade80; }
+.mock-card-value.red { color: #f87171; }
+
+.mock-chart-area {
+  background: rgba(255,255,255,0.03);
+  border-radius: 12px;
+  padding: 14px;
+  height: 240px;
+  position: relative;
+  overflow: hidden;
+}
+.mock-chart-title {
+  font-size: 9px;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+.mock-donut {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  margin: 10px auto;
+  border-radius: 50%;
+  background: conic-gradient(
+    #38bdf8 0deg 90deg,
+    #a78bfa 90deg 160deg,
+    #f87171 160deg 230deg,
+    #fbbf24 230deg 290deg,
+    #4ade80 290deg 360deg
+  );
+  display: grid;
+  place-items: center;
+}
+.mock-donut::after {
+  content: '';
+  width: 80px; height: 80px;
+  background: #0f172a;
+  border-radius: 50%;
+}
+
+/* Floating elements */
+.floating {
+  position: absolute;
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px 18px;
+  box-shadow: 0 12px 32px -8px rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  z-index: 5;
+}
+.floating-1 {
+  top: 60px;
+  left: -20px;
+  animation: floatA 6s ease-in-out infinite;
+}
+.floating-2 {
+  bottom: 100px;
+  right: -30px;
+  animation: floatB 7s ease-in-out infinite;
+}
+.floating-3 {
+  top: 250px;
+  right: -10px;
+  animation: floatA 8s ease-in-out infinite reverse;
+}
+@keyframes floatA {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+@keyframes floatB {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(12px); }
+}
+.floating-icon {
+  font-size: 24px;
+}
+.floating-text {
+  font-size: 12px;
+  color: var(--ink3);
+  font-weight: 500;
+  margin-top: 2px;
+}
+.floating-title {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 700;
+}
+@media (max-width: 768px) {
+  .floating-1 { left: -40px; transform: scale(0.8); }
+  .floating-2 { right: -40px; transform: scale(0.8); }
+  .floating-3 { display: none; }
+}
+
+/* ─── SOCIAL PROOF STRIP ───────── */
+.proof {
+  background: var(--ink);
+  color: var(--bg);
+  padding: 32px 0;
+  margin: 0;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+.proof-track {
+  display: flex;
+  gap: 60px;
+  white-space: nowrap;
+  animation: scroll 30s linear infinite;
+}
+@keyframes scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.proof-item {
+  font-family: var(--serif);
+  font-size: 28px;
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  gap: 60px;
+}
+.proof-item::after {
+  content: '✦';
+  color: var(--accent-bright);
+  font-style: normal;
+  font-size: 20px;
+}
+
+/* ─── FEATURES SECTION ─────────── */
+.section {
+  position: relative;
+  z-index: 2;
+  padding: 120px 32px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+@media (max-width: 768px) {
+  .section { padding: 70px 18px; }
+}
+
+.section-eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.section-title {
+  font-family: var(--serif);
+  font-size: clamp(40px, 6vw, 72px);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+  max-width: 900px;
+}
+.section-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+.section-sub {
+  font-size: 19px;
+  color: var(--ink3);
+  max-width: 640px;
+  line-height: 1.5;
+  margin-bottom: 60px;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  background: var(--line);
+  border-radius: 24px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+@media (max-width: 968px) {
+  .features-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .features-grid { grid-template-columns: 1fr; }
+}
+.feature {
+  background: white;
+  padding: 36px 28px;
+  position: relative;
+  transition: all 0.3s;
+  cursor: default;
+}
+.feature:hover {
+  background: #fafaf7;
+}
+.feature-icon {
+  width: 52px;
+  height: 52px;
+  background: var(--ink);
+  color: var(--bg);
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  margin-bottom: 22px;
+  transition: transform 0.3s;
+}
+.feature:hover .feature-icon {
+  transform: rotate(-5deg) scale(1.05);
+}
+.feature.highlight .feature-icon {
+  background: var(--accent);
+}
+.feature.highlight2 .feature-icon {
+  background: var(--accent-bright);
+  color: var(--ink);
+}
+.feature.highlight3 .feature-icon {
+  background: var(--accent-warm);
+  color: var(--ink);
+}
+.feature-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin-bottom: 10px;
+}
+.feature-desc {
+  font-size: 15px;
+  color: var(--ink3);
+  line-height: 1.55;
+}
+
+/* ─── HOW IT WORKS ─────────────── */
+.how {
+  background: var(--bg2);
+  padding: 100px 32px;
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.how-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+@media (max-width: 768px) {
+  .how { padding: 70px 18px; }
+}
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 60px;
+}
+@media (max-width: 768px) {
+  .steps { grid-template-columns: 1fr; gap: 24px; }
+}
+.step {
+  position: relative;
+  padding: 32px;
+  background: white;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+}
+.step-num {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 80px;
+  line-height: 1;
+  color: var(--accent);
+  margin-bottom: 16px;
+  letter-spacing: -0.04em;
+}
+.step-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: -0.01em;
+}
+.step-desc {
+  font-size: 15px;
+  color: var(--ink3);
+  line-height: 1.55;
+}
+
+/* ─── PROMOS DEMO ──────────────── */
+.promos-demo {
+  background: var(--ink);
+  color: var(--bg);
+  padding: 100px 32px;
+  position: relative;
+  z-index: 2;
+  overflow: hidden;
+}
+@media (max-width: 768px) {
+  .promos-demo { padding: 70px 18px; }
+}
+.promos-demo::before {
+  content: '';
+  position: absolute;
+  top: -200px; right: -200px;
+  width: 500px; height: 500px;
+  background: radial-gradient(circle, rgba(45,212,191,0.15), transparent 70%);
+}
+.promos-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  position: relative;
+}
+.promos-inner .section-eyebrow { color: var(--accent-bright); }
+.promos-inner .section-title { color: var(--bg); }
+.promos-inner .section-title em { color: var(--accent-bright); }
+.promos-inner .section-sub { color: rgba(255,255,255,0.65); }
+
+.promos-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-top: 40px;
+}
+@media (max-width: 968px) {
+  .promos-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 480px) {
+  .promos-grid { grid-template-columns: 1fr; }
+}
+.promo-card {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 16px;
+  padding: 24px;
+  transition: all 0.3s;
+  backdrop-filter: blur(10px);
+}
+.promo-card:hover {
+  background: rgba(255,255,255,0.1);
+  transform: translateY(-4px);
+}
+.promo-store {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.promo-discount {
+  font-family: var(--mono);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  margin-bottom: 8px;
+}
+.promo-discount.green { color: #4ade80; }
+.promo-discount.cyan { color: #2dd4bf; }
+.promo-discount.orange { color: #fb923c; }
+.promo-discount.purple { color: #a78bfa; }
+.promo-meta {
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.5;
+}
+.promo-day {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-bright);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-top: 12px;
+  padding: 4px 10px;
+  border: 1px solid rgba(45,212,191,0.3);
+  border-radius: 100px;
+}
+
+/* ─── PRICING ──────────────────── */
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 60px;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+@media (max-width: 968px) {
+  .pricing-grid { grid-template-columns: 1fr; max-width: 480px; }
+}
+.price-card {
+  background: white;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 36px 32px;
+  position: relative;
+  transition: all 0.3s;
+}
+.price-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 50px -20px rgba(0,0,0,0.15);
+}
+.price-card.featured {
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+}
+.price-badge {
+  position: absolute;
+  top: -12px;
+  right: 24px;
+  background: var(--accent-warm);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.price-name {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  letter-spacing: -0.01em;
+}
+.price-tagline {
+  font-size: 14px;
+  color: var(--ink3);
+  margin-bottom: 24px;
+}
+.price-card.featured .price-tagline { color: rgba(255,255,255,0.7); }
+.price-amount {
+  font-family: var(--serif);
+  font-size: 56px;
+  line-height: 1;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  margin-bottom: 24px;
+}
+.price-amount .small {
+  font-size: 18px;
+  color: var(--ink3);
+  font-family: var(--sans);
+  font-weight: 500;
+}
+.price-card.featured .price-amount .small { color: rgba(255,255,255,0.6); }
+.price-card .free-tag {
+  display: inline-block;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 32px;
+  color: var(--accent);
+}
+.price-features {
+  list-style: none;
+  margin-bottom: 28px;
+}
+.price-features li {
+  font-size: 15px;
+  padding: 8px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.price-features li::before {
+  content: '✓';
+  color: var(--green);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.price-card.featured .price-features li::before { color: var(--accent-bright); }
+.price-cta {
+  display: block;
+  text-align: center;
+  width: 100%;
+  padding: 14px 24px;
+  border-radius: 100px;
+  font-weight: 600;
+  font-size: 15px;
+  background: var(--ink);
+  color: var(--bg);
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+.price-cta:hover { transform: translateY(-1px); }
+.price-card.featured .price-cta {
+  background: var(--bg);
+  color: var(--ink);
+}
+.price-card:not(.featured) .price-cta-secondary {
+  background: white;
+  color: var(--ink);
+  border-color: var(--line);
+}
+.price-card:not(.featured) .price-cta-secondary:hover { border-color: var(--ink); }
+
+/* ─── FAQ ──────────────────────── */
+.faq-section {
+  background: var(--bg2);
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  position: relative;
+  z-index: 2;
+}
+.faq-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 80px;
+}
+@media (max-width: 868px) {
+  .faq-grid { grid-template-columns: 1fr; gap: 30px; }
+}
+.faq-list {
+  display: flex;
+  flex-direction: column;
+}
+.faq-item {
+  border-bottom: 1px solid var(--line);
+}
+.faq-item:first-child { border-top: 1px solid var(--line); }
+.faq-q {
+  width: 100%;
+  text-align: left;
+  padding: 24px 0;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.faq-q::after {
+  content: '+';
+  font-size: 24px;
+  font-weight: 300;
+  color: var(--ink3);
+  transition: transform 0.3s;
+}
+.faq-item.open .faq-q::after { transform: rotate(45deg); }
+.faq-a {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s ease;
+  font-size: 15px;
+  color: var(--ink3);
+  line-height: 1.6;
+}
+.faq-item.open .faq-a {
+  max-height: 300px;
+  padding-bottom: 24px;
+}
+
+/* ─── BIG CTA ──────────────────── */
+.cta-section {
+  position: relative;
+  z-index: 2;
+  padding: 140px 32px;
+  text-align: center;
+}
+@media (max-width: 768px) {
+  .cta-section { padding: 80px 18px; }
+}
+.cta-title {
+  font-family: var(--serif);
+  font-size: clamp(56px, 10vw, 140px);
+  font-weight: 400;
+  line-height: 0.92;
+  letter-spacing: -0.04em;
+  margin-bottom: 32px;
+  max-width: 1100px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.cta-title em {
+  font-style: italic;
+  color: var(--accent);
+}
+.cta-sub {
+  font-size: 20px;
+  color: var(--ink3);
+  margin-bottom: 40px;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ─── FOOTER ───────────────────── */
+.footer {
+  border-top: 1px solid var(--line);
+  padding: 60px 32px 32px;
+  position: relative;
+  z-index: 2;
+  background: var(--bg);
+}
+@media (max-width: 768px) {
+  .footer { padding: 40px 18px 24px; }
+}
+.footer-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+.footer-top {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 60px;
+  padding-bottom: 50px;
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 768px) {
+  .footer-top { grid-template-columns: 1fr 1fr; gap: 30px; }
+}
+.footer-brand {
+  font-family: var(--serif);
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+.footer-tagline {
+  font-size: 14px;
+  color: var(--ink3);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+.footer-col h4 {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--ink3);
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+.footer-col a {
+  display: block;
+  font-size: 14px;
+  color: var(--ink2);
+  margin-bottom: 10px;
+  transition: color 0.2s;
+}
+.footer-col a:hover { color: var(--accent); }
+
+.footer-bottom {
+  padding-top: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink3);
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.made-with {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ─── REVEAL ANIMATION ─────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.8s ease, transform 0.8s ease;
+}
+.reveal.in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Decorative SVG line */
+.deco-line {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+}
+</style>
+</head>
+<body>
+
+<!-- ─── NAV ────────────────────── -->
+<nav class="nav" id="nav">
+  <a href="#" class="logo">
+    <div class="logo-mark">F</div>
+    FlowCash
+  </a>
+  <div class="nav-links">
+    <a href="#features">Features</a>
+    <a href="#promos">Promos</a>
+    <a href="#precios">Precios</a>
+    <a href="#faq">FAQ</a>
+    <a href="https://flowcash-chi.vercel.app" class="btn-cta">
+      Probar gratis →
+    </a>
+  </div>
+</nav>
+
+<!-- ─── HERO ───────────────────── -->
+<header class="hero">
+  <div class="hero-eyebrow">
+    <span class="dot"></span>
+    Hecho en Argentina · 2026
+  </div>
+
+  <h1 class="hero-title reveal">
+    Tus <span class="strike">finanzas</span><br>
+    <em>al día.</em><br>
+    Por primera vez.
+  </h1>
+
+  <p class="hero-sub reveal">
+    La app argentina que junta <strong>presupuesto, metas, IA y promos del súper</strong> en un solo lugar. Sin Excel, sin Notion, sin cuaderno.
+  </p>
+
+  <div class="hero-actions reveal">
+    <a href="https://flowcash-chi.vercel.app" class="btn-primary-big">
+      Empezá gratis →
+    </a>
+    <a href="#features" class="btn-secondary-big">Ver cómo funciona</a>
+  </div>
+
+  <div class="hero-meta reveal">
+    <div class="hero-meta-item">5 días gratis</div>
+    <div class="hero-meta-item">Sin tarjeta</div>
+    <div class="hero-meta-item">Funciona offline</div>
+  </div>
+
+  <!-- Mockup del celular -->
+  <div class="hero-visual reveal">
+
+    <div class="floating floating-1">
+      <span class="floating-icon">🤖</span>
+      <div>
+        <div class="floating-title">Asesor con IA</div>
+        <div class="floating-text">"Gastaste 25% más en comida"</div>
+      </div>
+    </div>
+
+    <div class="floating floating-2">
+      <span class="floating-icon">🎯</span>
+      <div>
+        <div class="floating-title">Meta cumplida</div>
+        <div class="floating-text">Viaje a Brasil ✓</div>
+      </div>
+    </div>
+
+    <div class="floating floating-3">
+      <span class="floating-icon">📷</span>
+      <div>
+        <div class="floating-title">Ticket escaneado</div>
+        <div class="floating-text">8 ítems detectados</div>
+      </div>
+    </div>
+
+    <div class="phone-mockup">
+      <div class="phone-notch"></div>
+      <div class="phone-screen">
+        <div class="mock-header">
+          <span style="font-weight:800;font-size:18px">FlowCash</span>
+          <span style="font-size:11px;color:rgba(255,255,255,0.5)">Abril 2026</span>
+        </div>
+
+        <div class="mock-cards">
+          <div class="mock-card">
+            <div class="mock-card-label">Ingresos</div>
+            <div class="mock-card-value green">$1.925.000</div>
+          </div>
+          <div class="mock-card">
+            <div class="mock-card-label">Gastos</div>
+            <div class="mock-card-value red">$1.234.500</div>
+          </div>
+        </div>
+
+        <div class="mock-card" style="margin-bottom:16px">
+          <div class="mock-card-label">Balance</div>
+          <div class="mock-card-value" style="color:#38bdf8">+$690.500</div>
+        </div>
+
+        <div class="mock-chart-area">
+          <div class="mock-chart-title">Gastos por categoría</div>
+          <div class="mock-donut"></div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;font-size:9px;color:rgba(255,255,255,0.7)">
+            <span>● Comida</span><span>● Transporte</span><span>● Salidas</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+</header>
+
+<!-- ─── PROOF STRIP ─────────────── -->
+<section class="proof">
+  <div class="proof-track">
+    <span class="proof-item">Sin Excel</span>
+    <span class="proof-item">Sin cuaderno</span>
+    <span class="proof-item">Sin Notion</span>
+    <span class="proof-item">Sin spam</span>
+    <span class="proof-item">Sin complicaciones</span>
+    <span class="proof-item">Sin Excel</span>
+    <span class="proof-item">Sin cuaderno</span>
+    <span class="proof-item">Sin Notion</span>
+    <span class="proof-item">Sin spam</span>
+    <span class="proof-item">Sin complicaciones</span>
+  </div>
+</section>
+
+<!-- ─── FEATURES ────────────────── -->
+<section class="section" id="features">
+  <div class="section-eyebrow reveal">Todo en una sola app</div>
+  <h2 class="section-title reveal">
+    Todo lo que necesitás para <em>ordenar tu plata.</em>
+  </h2>
+  <p class="section-sub reveal">
+    Nueve herramientas financieras pensadas para la realidad argentina, en una sola app.
+  </p>
+
+  <div class="features-grid reveal">
+    <div class="feature highlight">
+      <div class="feature-icon">📊</div>
+      <h3 class="feature-title">Dashboard</h3>
+      <p class="feature-desc">Ingresos, gastos y balance del mes con gráficos que se entienden de un vistazo.</p>
+    </div>
+
+    <div class="feature highlight2">
+      <div class="feature-icon">🎯</div>
+      <h3 class="feature-title">Metas</h3>
+      <p class="feature-desc">Definís un objetivo y FlowCash calcula cuánto ahorrar por mes para llegar a tiempo.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">🤝</div>
+      <h3 class="feature-title">Deudas</h3>
+      <p class="feature-desc">Control de lo que te deben y lo que debés, con seguimiento de pagos parciales.</p>
+    </div>
+
+    <div class="feature highlight3">
+      <div class="feature-icon">👫</div>
+      <h3 class="feature-title">Modo pareja</h3>
+      <p class="feature-desc">Vinculás cuentas con tu pareja y ven las finanzas combinadas, sin perder privacidad.</p>
+    </div>
+
+    <div class="feature highlight">
+      <div class="feature-icon">🤖</div>
+      <h3 class="feature-title">Asesor con IA</h3>
+      <p class="feature-desc">Conoce tus datos reales y responde preguntas como "¿En qué gasto más?".</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">📷</div>
+      <h3 class="feature-title">Escaneo de tickets</h3>
+      <p class="feature-desc">Sacás foto y la IA carga todos los gastos automáticamente. También PDFs.</p>
+    </div>
+
+    <div class="feature highlight2">
+      <div class="feature-icon">🎁</div>
+      <h3 class="feature-title">Promos del día</h3>
+      <p class="feature-desc">Descuentos bancarios actualizados a diario en súper, ML, ropa, electrónica y más.</p>
+    </div>
+
+    <div class="feature">
+      <div class="feature-icon">💱</div>
+      <h3 class="feature-title">Dólar en vivo</h3>
+      <p class="feature-desc">Cotización del blue, oficial, MEP y CCL. Cargá gastos en cualquier moneda.</p>
+    </div>
+
+    <div class="feature highlight3">
+      <div class="feature-icon">📱</div>
+      <h3 class="feature-title">Funciona offline</h3>
+      <p class="feature-desc">Una vez que entrás con conexión, la app anda sin internet. Se sincroniza al volver.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─── HOW IT WORKS ────────────── -->
+<section class="how">
+  <div class="how-inner">
+    <div class="section-eyebrow reveal">Empezar es fácil</div>
+    <h2 class="section-title reveal">
+      Tres pasos. <em>Cinco minutos.</em>
+    </h2>
+
+    <div class="steps reveal">
+      <div class="step">
+        <div class="step-num">i.</div>
+        <h3 class="step-title">Te registrás</h3>
+        <p class="step-desc">Nombre, email y una contraseña. Sin tarjeta, sin DNI. En 30 segundos estás adentro.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">ii.</div>
+        <h3 class="step-title">Cargás tu plata</h3>
+        <p class="step-desc">Ingresos y gastos a mano, escaneando un ticket o por voz. Vos elegís el método.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">iii.</div>
+        <h3 class="step-title">Tomás decisiones</h3>
+        <p class="step-desc">Con datos reales y consejos del asesor IA, sabés exactamente dónde está tu plata.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PROMOS DEMO ─────────────── -->
+<section class="promos-demo" id="promos">
+  <div class="promos-inner">
+    <div class="section-eyebrow reveal">Promos en vivo</div>
+    <h2 class="section-title reveal">
+      Aprovechá las <em>mejores promos</em><br>
+      del país.
+    </h2>
+    <p class="section-sub reveal">
+      Más de 50 supermercados, tiendas y servicios. Filtradas según tus tarjetas. Actualizadas todos los días.
+    </p>
+
+    <div class="promos-grid reveal">
+      <div class="promo-card">
+        <div class="promo-store">🟦 Carrefour</div>
+        <div class="promo-discount green">25%</div>
+        <div class="promo-meta">Galicia · Visa Crédito</div>
+        <span class="promo-day">Miércoles</span>
+      </div>
+      <div class="promo-card">
+        <div class="promo-store">🛍️ Mercado Libre</div>
+        <div class="promo-discount cyan">30%</div>
+        <div class="promo-meta">Mercado Pago · 6 cuotas</div>
+        <span class="promo-day">Hot Sale</span>
+      </div>
+      <div class="promo-card">
+        <div class="promo-store">⛽ YPF</div>
+        <div class="promo-discount orange">20%</div>
+        <div class="promo-meta">App YPF + Modo</div>
+        <span class="promo-day">Reintegro</span>
+      </div>
+      <div class="promo-card">
+        <div class="promo-store">📱 Frávega</div>
+        <div class="promo-discount purple">25%</div>
+        <div class="promo-meta">Santander · 12 cuotas s/i</div>
+        <span class="promo-day">Tecnología</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── PRICING ─────────────────── -->
+<section class="section" id="precios">
+  <div style="text-align:center">
+    <div class="section-eyebrow reveal">Precios simples</div>
+    <h2 class="section-title reveal" style="margin-left:auto;margin-right:auto">
+      Tres planes. <em>Vos elegís.</em>
+    </h2>
+    <p class="section-sub reveal" style="margin-left:auto;margin-right:auto">
+      Empezá con <strong>5 días gratis</strong> en cualquier plan. Sin tarjeta. Cambiás o cancelás cuando quieras.
+    </p>
+  </div>
+
+  <div class="pricing-grid reveal">
+    <div class="price-card">
+      <h3 class="price-name">Básico</h3>
+      <p class="price-tagline">Lo esencial para ordenar tu plata</p>
+      <div class="price-amount">
+        $3.000<span class="small">/mes</span>
+      </div>
+      <ul class="price-features">
+        <li>Movimientos ilimitados</li>
+        <li>Categorías y billeteras propias</li>
+        <li>Dashboard con gráficos</li>
+        <li>Presupuestos y metas</li>
+        <li>Deudas y préstamos</li>
+        <li>Cotización del dólar</li>
+        <li>Modo offline</li>
+        <li>Exportar CSV/PDF</li>
+      </ul>
+      <a href="https://flowcash-chi.vercel.app" class="price-cta price-cta-secondary">Empezar</a>
+    </div>
+
+    <div class="price-card featured">
+      <span class="price-badge">Más popular</span>
+      <h3 class="price-name">Completo</h3>
+      <p class="price-tagline">Todo, sin límites</p>
+      <div class="price-amount">
+        $5.000<span class="small">/mes</span>
+      </div>
+      <ul class="price-features">
+        <li>Todo lo del plan Básico</li>
+        <li>Asesor con IA ilimitado</li>
+        <li>Escaneo de tickets y PDF</li>
+        <li>Promos del súper y descuentos</li>
+        <li>Modo pareja</li>
+        <li>Carga por voz</li>
+        <li>Divisor de gastos</li>
+      </ul>
+      <a href="https://flowcash-chi.vercel.app" class="price-cta">Empezar ahora</a>
+    </div>
+
+    <div class="price-card">
+      <h3 class="price-name">Personalizado</h3>
+      <p class="price-tagline">Funcionalidades a tu medida</p>
+      <div class="price-amount">
+        $6.500<span class="small">/mes</span>
+      </div>
+      <ul class="price-features">
+        <li>Todo lo del plan Completo</li>
+        <li>Módulo de inversiones (a pedido)</li>
+        <li>Sección para tu empresa</li>
+        <li>Reportes con tu marca</li>
+        <li>Integraciones a tu medida</li>
+        <li>Soporte prioritario</li>
+      </ul>
+      <a href="mailto:ojedafausto1@gmail.com" class="price-cta price-cta-secondary">Consultar</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── FAQ ─────────────────────── -->
+<section class="faq-section section" id="faq">
+  <div class="faq-grid">
+    <div>
+      <div class="section-eyebrow reveal">Preguntas frecuentes</div>
+      <h2 class="section-title reveal" style="font-size:clamp(36px,5vw,56px)">
+        Todo lo que <em>tenés que saber.</em>
+      </h2>
+    </div>
+
+    <div class="faq-list reveal">
+      <div class="faq-item">
+        <button class="faq-q">¿Mis datos están seguros?</button>
+        <div class="faq-a">Sí. FlowCash usa Firebase de Google con encriptación. Solo vos podés ver tu información. Los datos también se guardan localmente en tu dispositivo para uso offline.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿Puedo usarla en varios dispositivos?</button>
+        <div class="faq-a">Sí. Entrá con tu mismo usuario en computadora, celular y tablet. Todo se sincroniza automáticamente cuando hay conexión.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿Funciona sin internet?</button>
+        <div class="faq-a">Sí. Una vez que iniciás sesión con conexión, la app funciona offline. Cuando vuelve internet, sincroniza automáticamente.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿Cómo cancelo el plan?</button>
+        <div class="faq-a">Cancelás cuando quieras. Mientras tu suscripción esté activa, mantenés acceso completo. Tus datos no se borran si decidís pausar.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿El asesor IA es realmente útil?</button>
+        <div class="faq-a">El asesor analiza tus datos reales (no respuestas genéricas). Te dice cosas concretas como "Gastaste $180.000 en Comida, 25% más que el mes anterior". Sirve para tomar decisiones, no para charlar.</div>
+      </div>
+      <div class="faq-item">
+        <button class="faq-q">¿De dónde sacan las promos del súper?</button>
+        <div class="faq-a">Las actualizamos a diario consultando los sitios oficiales de cada supermercado y banco. La IA verifica que estén vigentes antes de mostrarlas.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── BIG CTA ─────────────────── -->
+<section class="cta-section">
+  <h2 class="cta-title reveal">
+    Tu plata,<br>
+    <em>ordenada</em>,<br>
+    en 5 minutos.
+  </h2>
+  <p class="cta-sub reveal">No es magia, es FlowCash.</p>
+  <div class="reveal" style="display:inline-block">
+    <a href="https://flowcash-chi.vercel.app" class="btn-primary-big">
+      Empezar gratis →
+    </a>
+  </div>
+</section>
+
+<!-- ─── FOOTER ──────────────────── -->
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-top">
+      <div>
+        <div class="footer-brand">FlowCash</div>
+        <p class="footer-tagline">Finanzas personales para argentinos.<br>Sin Excel, sin cuaderno, sin vueltas.</p>
+        <div style="display:flex;gap:12px;margin-top:16px">
+          <a href="https://instagram.com/flowcash.ar" target="_blank" style="font-size:13px;font-weight:600">Instagram →</a>
+        </div>
+      </div>
+      <div class="footer-col">
+        <h4>Producto</h4>
+        <a href="#features">Features</a>
+        <a href="#promos">Promos</a>
+        <a href="#precios">Precios</a>
+        <a href="https://flowcash-chi.vercel.app">Probar gratis</a>
+      </div>
+      <div class="footer-col">
+        <h4>Empresa</h4>
+        <a href="#faq">FAQ</a>
+        <a href="mailto:ojedafausto1@gmail.com">Contacto</a>
+        <a href="#">Términos</a>
+        <a href="#">Privacidad</a>
+      </div>
+      <div class="footer-col">
+        <h4>Recursos</h4>
+        <a href="#">Manual</a>
+        <a href="#">Guía rápida</a>
+        <a href="#">Soporte</a>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© 2026 FlowCash · Hecho en Argentina 🇦🇷</span>
+      <span class="made-with">Tigre, Buenos Aires</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Nav scroll
+  const nav = document.getElementById('nav');
+  window.addEventListener('scroll', () => {
+    nav.classList.toggle('scrolled', window.scrollY > 20);
+  });
+
+  // Reveal on scroll
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        observer.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -60px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // FAQ toggle
+  document.querySelectorAll('.faq-q').forEach(q => {
+    q.addEventListener('click', () => {
+      const item = q.closest('.faq-item');
+      const wasOpen = item.classList.contains('open');
+      document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+      if (!wasOpen) item.classList.add('open');
+    });
+  });
+</script>
+
+</body>
+</html>
