@@ -3401,7 +3401,87 @@ const MESES   = ["Enero","Febrero","Marzo","Abril","Mayo","Junio",
                  "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
 let currentUser = null;
+let userPlan = 'completo'; // 'basico' | 'completo' | 'personalizado' (default por compatibilidad)
 let userData = {movimientos:[],budgets:{},customCats:null,customWallets:null,walletInitials:{},metas:[],tarjetas:[],sharedWith:{},deudas:[],pareja:{activo:false,email:'',nombre:''}};
+
+// ══════════════════════════════════════════════
+//  SISTEMA DE PLANES
+// ══════════════════════════════════════════════
+const PLANES = {
+  basico: {
+    nombre: 'Básico',
+    precio: 3000,
+    color: '#94a3b8',
+    features: ['movimientos','presupuesto','metas','deudas','wallets','dashboard','dolar','export']
+  },
+  completo: {
+    nombre: 'Completo',
+    precio: 5000,
+    color: '#38bdf8',
+    features: ['movimientos','presupuesto','metas','deudas','wallets','dashboard','dolar','export',
+               'asesor','ticket','promos','pareja','voz','divisor']
+  },
+  personalizado: {
+    nombre: 'Personalizado',
+    precio: 6500,
+    color: '#a78bfa',
+    features: ['movimientos','presupuesto','metas','deudas','wallets','dashboard','dolar','export',
+               'asesor','ticket','promos','pareja','voz','divisor','custom']
+  }
+};
+
+function tieneFeature(feature) {
+  // Admin siempre tiene todo
+  if (currentUser?.email === ADMIN_EMAIL) return true;
+  const plan = PLANES[userPlan] || PLANES.completo;
+  return plan.features.includes(feature);
+}
+
+function aplicarPlanAUI() {
+  // Ocultar/mostrar items del sidebar según plan
+  const featuresViews = {
+    asesor: ['asesor'],
+    ticket: ['ticket'],
+    promos: ['supermercados'],
+    pareja: ['pareja'],
+    divisor: ['divisor'],
+  };
+
+  Object.entries(featuresViews).forEach(([feat, views]) => {
+    const visible = tieneFeature(feat);
+    views.forEach(view => {
+      // Sidebar
+      document.querySelectorAll(`.nav-item[data-view="${view}"]`).forEach(b => {
+        b.style.display = visible ? '' : 'none';
+      });
+      // Drawer
+      document.querySelectorAll(`.drawer-item[data-view="${view}"]`).forEach(b => {
+        b.style.display = visible ? '' : 'none';
+      });
+      // Bottom nav
+      document.querySelectorAll(`.bnav-item[data-view="${view}"]`).forEach(b => {
+        b.style.display = visible ? '' : 'none';
+      });
+    });
+  });
+
+  // Tile de voz en dashboard
+  const tileVoz = document.querySelector('.tile-voice');
+  if (tileVoz) tileVoz.style.display = tieneFeature('voz') ? '' : 'none';
+
+  // Mostrar badge del plan en el perfil
+  const planBadge = document.getElementById('user-plan-badge');
+  if (planBadge) {
+    const plan = PLANES[userPlan] || PLANES.completo;
+    planBadge.textContent = plan.nombre;
+    planBadge.style.background = plan.color;
+    planBadge.style.display = currentUser?.email === ADMIN_EMAIL ? 'none' : '';
+  }
+}
+
+function showLockedFeature(featureName) {
+  showToast(`🔒 "${featureName}" requiere el plan Completo. Mejorá tu plan desde Configuración.`);
+}
 let currentPeriod = {year: new Date().getFullYear(), month: new Date().getMonth()};
 let activeFilter = 'Todos';
 let chartCat=null, chartEvo=null, chartAnual=null;
@@ -3723,6 +3803,8 @@ async function handleAuthUser(user) {
           return;
         }
       }
+      // Cargar plan del usuario
+      userPlan = data.plan || 'completo';
       await loadFromFirestore();
       launchApp();
     } else if (data.status === 'pending') {
@@ -3811,6 +3893,7 @@ function launchApp() {
   fetchDolar();
   loadSavedTheme();
   renderThemePanel();
+  aplicarPlanAUI(); // Aplicar restricciones del plan
   updateNotifBadge();
   // Cargar config global PRIMERO (URLs de promos, backup, notificaciones)
   cargarConfigGlobal().then(() => {
@@ -5379,15 +5462,24 @@ async function loadAdminUsers(){
               venceInfo = `<div style="font-size:11px;color:var(--text3)">Acceso hasta ${fechaStr}</div>`;
             }
           }
+          const planActual = u.plan || 'completo';
+          const planInfo = PLANES[planActual] || PLANES.completo;
           return `<div class="admin-user-row">
             <div class="admin-user-info">
-              <div class="admin-user-name">${u.displayName}</div>
+              <div class="admin-user-name">${u.displayName}
+                <span style="display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:100px;color:#0f172a;background:${planInfo.color};margin-left:6px">${planInfo.nombre}</span>
+              </div>
               <div class="admin-user-email">${u.displayEmail}</div>
-              <div style="font-size:11px;color:var(--text3);margin-top:1px">${(u.movimientos||[]).length} movimientos</div>
+              <div style="font-size:11px;color:var(--text3);margin-top:1px">${(u.movimientos||[]).length} movimientos · $${planInfo.precio.toLocaleString('es-AR')}/mes</div>
               ${venceInfo}
             </div>
             <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;justify-content:flex-end">
               ${venceBadge}
+              <select onchange="cambiarPlan('${u.id}','${u.displayEmail}',this.value)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:11px;padding:4px 6px;border-radius:6px;cursor:pointer">
+                <option value="basico" ${planActual==='basico'?'selected':''}>Básico</option>
+                <option value="completo" ${planActual==='completo'?'selected':''}>Completo</option>
+                <option value="personalizado" ${planActual==='personalizado'?'selected':''}>Personalizado</option>
+              </select>
               <button class="btn-secondary" style="font-size:11px;color:var(--accent);border-color:rgba(56,189,248,0.3)"
                 onclick="darAcceso('${u.id}','${u.displayEmail}',5)">+5d</button>
               <button class="btn-secondary" style="font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3)"
@@ -5410,6 +5502,17 @@ async function loadAdminUsers(){
   } catch(e) { console.error('loadAdminUsers:', e); }
 }
 
+async function cambiarPlan(uid, email, plan) {
+  try {
+    await fsSet('users', uid, {plan});
+    const planInfo = PLANES[plan] || PLANES.completo;
+    showToast(`✅ ${email} → Plan ${planInfo.nombre}`);
+    loadAdminUsers();
+  } catch(e) {
+    showToast('Error: ' + e.message);
+  }
+}
+
 async function darAcceso(uid, email, dias) {
   try {
     const hoy   = new Date();
@@ -5424,7 +5527,10 @@ async function darAcceso(uid, email, dias) {
     const hasta = new Date(base);
     hasta.setDate(hasta.getDate() + dias);
     const hastaStr = hasta.toISOString().split('T')[0];
-    await fsSet('users', uid, {status: 'approved', accessUntil: hastaStr});
+    const updates = {status: 'approved', accessUntil: hastaStr};
+    // Si no tiene plan asignado, asignar 'completo' por defecto
+    if (!user?.plan) updates.plan = 'completo';
+    await fsSet('users', uid, updates);
     const fechaStr = hasta.toLocaleDateString('es-AR');
     showToast(`✅ ${email} — acceso hasta ${fechaStr}`);
     loadAdminUsers();
