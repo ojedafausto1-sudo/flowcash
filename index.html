@@ -805,6 +805,193 @@ body {
   .modal-overlay { align-items: center; }
   .modal { border-radius: var(--radius-lg) !important; max-width: 520px !important; }
 }
+/* ── DASHBOARD TABS ────────────────────── */
+.dash-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  padding: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dash-tabs::-webkit-scrollbar { display: none; }
+.dash-tab {
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: calc(var(--radius) - 4px);
+  white-space: nowrap;
+  transition: all 0.2s;
+  min-width: max-content;
+}
+.dash-tab:hover { color: var(--text); }
+.dash-tab.active {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+
+/* ── ESPERADOS ─────────────────────────── */
+.esperado-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+.esperado-item.pagado {
+  opacity: 0.5;
+  background: rgba(74,222,128,0.05);
+  border-color: rgba(74,222,128,0.3);
+}
+.esperado-item.pagado .esperado-concepto { text-decoration: line-through; }
+.esperado-check {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: var(--bg);
+  font-size: 14px;
+  font-weight: 900;
+  color: transparent;
+  transition: all 0.2s;
+}
+.esperado-check:hover { border-color: var(--accent); }
+.esperado-item.pagado .esperado-check {
+  background: var(--green);
+  border-color: var(--green);
+  color: white;
+}
+.esperado-info { flex: 1; min-width: 0; }
+.esperado-concepto {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.esperado-meta {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 2px;
+}
+.esperado-monto {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--red);
+  flex-shrink: 0;
+}
+
+/* ── LOGROS / INSIGNIAS ────────────────── */
+.logros-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+@media (max-width: 500px) {
+  .logros-stats { grid-template-columns: 1fr; }
+}
+.logro-stat {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+.logro-stat-num {
+  font-family: var(--mono);
+  font-size: 32px;
+  font-weight: 900;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.logro-stat-label {
+  font-size: 11px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+}
+.logros-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+}
+.logro-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 12px;
+  text-align: center;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+.logro-card.locked {
+  opacity: 0.4;
+  filter: grayscale(0.8);
+}
+.logro-card.unlocked {
+  background: linear-gradient(135deg, rgba(56,189,248,0.08), rgba(167,139,250,0.06));
+  border-color: rgba(56,189,248,0.3);
+}
+.logro-card.unlocked::before {
+  content: '';
+  position: absolute;
+  top: 0; right: 0;
+  width: 0; height: 0;
+  border-style: solid;
+  border-width: 0 24px 24px 0;
+  border-color: transparent var(--green) transparent transparent;
+}
+.logro-card.unlocked::after {
+  content: '✓';
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  font-size: 10px;
+  color: white;
+  font-weight: 900;
+}
+.logro-emoji {
+  font-size: 36px;
+  margin-bottom: 8px;
+  display: block;
+}
+.logro-titulo {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.logro-desc {
+  font-size: 10px;
+  color: var(--text3);
+  line-height: 1.3;
+}
+
 /* ── ONBOARDING ────────────────────────── */
 #onboarding-overlay { z-index: 600 !important; }
 .ob-dot {
@@ -2227,35 +2414,56 @@ body {
 
           <div id="proj-banner" style="display:none" class="proj-banner">🔮 Proyección estimada para este período</div>
           <div class="stats-grid" id="stats-grid"></div>
-          <div class="charts-grid">
-            <div class="card">
-              <div class="card-header"><span class="card-title">Gastos por categoría</span></div>
-              <div class="chart-box"><canvas id="chart-cat"></canvas></div>
-            </div>
-            <div class="card">
-              <div class="card-header"><span class="card-title">Evolución mensual</span></div>
-              <div class="chart-box"><canvas id="chart-evo"></canvas></div>
-            </div>
+
+          <!-- Pestañas del dashboard -->
+          <div class="dash-tabs">
+            <button class="dash-tab active" data-tab="resumen" onclick="setDashTab('resumen',this)">📊 Resumen</button>
+            <button class="dash-tab" data-tab="esperados" onclick="setDashTab('esperados',this)">📋 Esperados</button>
+            <button class="dash-tab" data-tab="logros" onclick="setDashTab('logros',this)">🏆 Logros</button>
           </div>
-          <div class="charts-grid" style="margin-bottom:14px">
-            <div class="card">
-              <div class="card-header"><span class="card-title">Gastos por billetera</span></div>
-              <div class="chart-box"><canvas id="chart-wallet"></canvas></div>
+
+          <!-- Tab Resumen (gráficos) -->
+          <div id="dash-tab-resumen" class="dash-tab-content">
+            <div class="charts-grid">
+              <div class="card">
+                <div class="card-header"><span class="card-title">Gastos por categoría</span></div>
+                <div class="chart-box"><canvas id="chart-cat"></canvas></div>
+              </div>
+              <div class="card">
+                <div class="card-header"><span class="card-title">Evolución mensual</span></div>
+                <div class="chart-box"><canvas id="chart-evo"></canvas></div>
+              </div>
             </div>
-            <div class="card">
-              <div class="card-header"><span class="card-title">Balance acumulado</span></div>
-              <div class="chart-box"><canvas id="chart-balance"></canvas></div>
+            <div class="charts-grid" style="margin-bottom:14px">
+              <div class="card">
+                <div class="card-header"><span class="card-title">Gastos por billetera</span></div>
+                <div class="chart-box"><canvas id="chart-wallet"></canvas></div>
+              </div>
+              <div class="card">
+                <div class="card-header"><span class="card-title">Balance acumulado</span></div>
+                <div class="chart-box"><canvas id="chart-balance"></canvas></div>
+              </div>
             </div>
+            <div class="card" id="compare-card" style="margin-bottom:14px">
+              <div class="card-header"><span class="card-title">vs Mes anterior</span></div>
+              <div class="compare-grid" id="compare-content"></div>
+            </div>
+            <div class="section-row">
+              <span class="section-label">Últimos movimientos</span>
+              <button class="link-btn" onclick="showView('movimientos')">Ver todos →</button>
+            </div>
+            <div class="tx-list" id="dash-tx-list"></div>
           </div>
-          <div class="card" id="compare-card" style="margin-bottom:14px">
-            <div class="card-header"><span class="card-title">vs Mes anterior</span></div>
-            <div class="compare-grid" id="compare-content"></div>
+
+          <!-- Tab Esperados (gastos pendientes del mes) -->
+          <div id="dash-tab-esperados" class="dash-tab-content" style="display:none">
+            <div id="esperados-content"></div>
           </div>
-          <div class="section-row">
-            <span class="section-label">Últimos movimientos</span>
-            <button class="link-btn" onclick="showView('movimientos')">Ver todos →</button>
+
+          <!-- Tab Logros (insignias) -->
+          <div id="dash-tab-logros" class="dash-tab-content" style="display:none">
+            <div id="logros-content"></div>
           </div>
-          <div class="tx-list" id="dash-tx-list"></div>
         </div>
 
         <!-- MOVIMIENTOS -->
@@ -5511,6 +5719,246 @@ const ONBOARDING_STEPS = [
     cta: 'Empezar'
   }
 ];
+
+function setDashTab(tab, el) {
+  document.querySelectorAll('.dash-tab').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.querySelectorAll('.dash-tab-content').forEach(c => c.style.display = 'none');
+  const target = document.getElementById('dash-tab-' + tab);
+  if (target) target.style.display = '';
+  if (tab === 'esperados') renderEsperados();
+  if (tab === 'logros') renderLogros();
+}
+
+// ── ESPERADOS DEL MES ──────────────────────
+function renderEsperados() {
+  const el = document.getElementById('esperados-content');
+  if (!el) return;
+  const movs = userData.movimientos || [];
+  const hoy = new Date();
+  const mesActual = hoy.toISOString().slice(0,7);
+
+  // Detectar todos los recurrentes (haya o no cargado este mes)
+  const grupos = {};
+  movs.forEach(m => {
+    if (m.tipo !== 'Gasto') return;
+    const key = (m.concepto||'').toLowerCase().trim().replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, '');
+    if (!key) return;
+    if (!grupos[key]) grupos[key] = [];
+    grupos[key].push(m);
+  });
+
+  const esperados = [];
+  Object.entries(grupos).forEach(([key, items]) => {
+    if (items.length < 2) return;
+    const meses = new Set(items.map(i => (i.fecha||'').slice(0,7)));
+    if (meses.size < 2) return;
+    const promedio = items.reduce((s,i) => s+Math.abs(i.importe||0), 0) / items.length;
+    const dias = items.map(i => parseInt((i.fecha||'').slice(8,10))).filter(d=>d>0);
+    const diaTipico = Math.round(dias.reduce((s,d)=>s+d,0)/dias.length);
+    const yaCargadoEsteMes = items.find(i => (i.fecha||'').startsWith(mesActual));
+    esperados.push({
+      key,
+      concepto: items[items.length-1].concepto.replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, ''),
+      importeProm: promedio,
+      categoria: items[items.length-1].categoria,
+      billetera: items[items.length-1].billetera,
+      diaTipico,
+      pagado: !!yaCargadoEsteMes,
+      pagadoMov: yaCargadoEsteMes
+    });
+  });
+
+  // Ordenar: no pagados primero, por día del mes
+  esperados.sort((a,b) => {
+    if (a.pagado !== b.pagado) return a.pagado ? 1 : -1;
+    return a.diaTipico - b.diaTipico;
+  });
+
+  if (!esperados.length) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">📋</div>
+      <div class="empty-text">Todavía no detectamos gastos recurrentes.<br><br><span style="font-size:12px">Cargá tus gastos durante 2 meses y FlowCash empezará a sugerirte automáticamente lo que se repite.</span></div>
+    </div>`;
+    return;
+  }
+
+  const total = esperados.reduce((s,e) => s + e.importeProm, 0);
+  const pagados = esperados.filter(e => e.pagado);
+  const pendientes = esperados.filter(e => !e.pagado);
+  const totalPendiente = pendientes.reduce((s,e) => s + e.importeProm, 0);
+
+  el.innerHTML = `
+    <div style="background:linear-gradient(135deg,rgba(56,189,248,0.08),rgba(167,139,250,0.04));border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="font-size:12px;color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.5px">Total esperado del mes</span>
+        <span style="font-family:var(--mono);font-size:20px;font-weight:800;color:var(--text)">${fmtARS(total)}</span>
+      </div>
+      <div style="height:6px;background:var(--bg);border-radius:3px;overflow:hidden;margin-bottom:8px">
+        <div style="height:100%;width:${(pagados.length/esperados.length*100).toFixed(0)}%;background:var(--green);transition:width 0.4s"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3)">
+        <span>✅ ${pagados.length}/${esperados.length} pagados</span>
+        <span>Pendiente: <strong style="color:var(--red)">${fmtARS(totalPendiente)}</strong></span>
+      </div>
+    </div>
+    ${pendientes.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--text3);margin:14px 0 8px">Pendientes (${pendientes.length})</div>` : ''}
+    ${pendientes.map(e => `
+      <div class="esperado-item" data-key="${e.key}">
+        <button class="esperado-check" onclick="togglePagadoEsperado('${e.key.replace(/'/g, "\\'")}')"></button>
+        <span style="font-size:20px;flex-shrink:0">${CAT_ICONS[e.categoria]||'📦'}</span>
+        <div class="esperado-info">
+          <div class="esperado-concepto">${e.concepto}</div>
+          <div class="esperado-meta">${e.categoria} · día ${e.diaTipico}</div>
+        </div>
+        <span class="esperado-monto">${fmtARS(e.importeProm)}</span>
+      </div>
+    `).join('')}
+    ${pagados.length ? `<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.7px;color:var(--text3);margin:18px 0 8px">Pagados (${pagados.length})</div>` : ''}
+    ${pagados.map(e => `
+      <div class="esperado-item pagado" data-key="${e.key}">
+        <button class="esperado-check" onclick="togglePagadoEsperado('${e.key.replace(/'/g, "\\'")}')">✓</button>
+        <span style="font-size:20px;flex-shrink:0;opacity:0.6">${CAT_ICONS[e.categoria]||'📦'}</span>
+        <div class="esperado-info">
+          <div class="esperado-concepto">${e.concepto}</div>
+          <div class="esperado-meta">${e.categoria} · ${fmtARS(e.pagadoMov?.importe || e.importeProm)} pagado</div>
+        </div>
+        <span class="esperado-monto" style="color:var(--green)">✓</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+function togglePagadoEsperado(key) {
+  const hoy = new Date().toISOString().split('T')[0];
+  const mesActual = hoy.slice(0,7);
+  const movs = userData.movimientos || [];
+
+  // ¿Ya está pagado este mes?
+  const yaCargado = movs.find(m => {
+    if (m.tipo !== 'Gasto') return false;
+    const c = (m.concepto||'').toLowerCase().trim().replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, '');
+    return c === key && (m.fecha||'').startsWith(mesActual);
+  });
+
+  if (yaCargado) {
+    // Si ya está cargado, lo eliminamos
+    if (!confirm('¿Sacar este gasto de tu lista de pagados? Se elimina del mes.')) return;
+    userData.movimientos = movs.filter(m => m.id !== yaCargado.id);
+    renderEsperados();
+    renderAll();
+    saveToFirestore()
+      .then(() => showToast('🗑 Pagado deshecho'))
+      .catch(() => showToast('🗑 Deshecho localmente'));
+    return;
+  }
+
+  // Encontrar el más reciente con esa key para copiar datos
+  const referencia = movs.slice().reverse().find(m => {
+    if (m.tipo !== 'Gasto') return false;
+    const c = (m.concepto||'').toLowerCase().trim().replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, '');
+    return c === key;
+  });
+  if (!referencia) return;
+
+  // Calcular promedio
+  const items = movs.filter(m => {
+    if (m.tipo !== 'Gasto') return false;
+    const c = (m.concepto||'').toLowerCase().trim().replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, '');
+    return c === key;
+  });
+  const promedio = items.reduce((s,i)=>s+Math.abs(i.importe||0),0) / items.length;
+
+  const nuevo = {
+    id: Date.now(),
+    fecha: hoy,
+    tipo: 'Gasto',
+    concepto: referencia.concepto.replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, ''),
+    categoria: referencia.categoria,
+    billetera: referencia.billetera,
+    importe: promedio,
+    estado: 'Pagado'
+  };
+  userData.movimientos.push(nuevo);
+  renderEsperados();
+  renderAll();
+  mostrarConfirmacionAnimada();
+  saveToFirestore()
+    .then(() => showToast(`✅ ${nuevo.concepto} marcado como pagado`))
+    .catch(() => showToast(`✅ Guardado localmente`));
+}
+
+// ── LOGROS / INSIGNIAS ─────────────────────
+const LOGROS = [
+  { id:'first_mov', emoji:'🌱', titulo:'Primer paso', desc:'Cargaste tu primer movimiento', check:() => (userData.movimientos||[]).length >= 1 },
+  { id:'first_week', emoji:'📅', titulo:'Primera semana', desc:'Cargaste durante 7 días', check:() => getRachaCarga() >= 7 },
+  { id:'month_streak', emoji:'🔥', titulo:'Mes de fuego', desc:'30 días seguidos cargando', check:() => getRachaCarga() >= 30 },
+  { id:'centenario', emoji:'💯', titulo:'Centenario', desc:'100 movimientos cargados', check:() => (userData.movimientos||[]).length >= 100 },
+  { id:'quinientos', emoji:'🏆', titulo:'500 movimientos', desc:'Sos un experto', check:() => (userData.movimientos||[]).length >= 500 },
+  { id:'first_meta', emoji:'🎯', titulo:'Primera meta', desc:'Creaste tu primera meta de ahorro', check:() => (userData.metas||[]).length >= 1 },
+  { id:'meta_cumplida', emoji:'🏁', titulo:'Meta cumplida', desc:'Llegaste al 100% de una meta', check:() => (userData.metas||[]).some(m => (m.ahorrado||0) >= (m.monto||1)) },
+  { id:'budget_master', emoji:'📊', titulo:'Maestro del presupuesto', desc:'Configuraste 5+ presupuestos', check:() => Object.keys(userData.budgets||{}).filter(k => userData.budgets[k] > 0).length >= 5 },
+  { id:'ahorrador', emoji:'💰', titulo:'Ahorrador', desc:'Cargaste un ahorro', check:() => (userData.movimientos||[]).some(m => m.tipo === 'Ahorro') },
+  { id:'deuda_paga', emoji:'🤝', titulo:'Sin deudas', desc:'Saldaste una deuda completa', check:() => (userData.deudas||[]).some(d => (d.pagado||0) >= (d.monto||1)) },
+  { id:'pareja', emoji:'👫', titulo:'En pareja', desc:'Activaste el modo pareja', check:() => userData.pareja?.activo },
+  { id:'todo_un_mes', emoji:'📆', titulo:'Mes completo', desc:'Cargaste movimientos en 28+ días del mismo mes', check:() => {
+    const porMes = {};
+    (userData.movimientos||[]).forEach(m => {
+      const mes = (m.fecha||'').slice(0,7);
+      if (!porMes[mes]) porMes[mes] = new Set();
+      porMes[mes].add((m.fecha||'').slice(8,10));
+    });
+    return Object.values(porMes).some(dias => dias.size >= 28);
+  }},
+];
+
+function renderLogros() {
+  const el = document.getElementById('logros-content');
+  if (!el) return;
+  const desbloqueados = LOGROS.filter(l => { try { return l.check(); } catch(e) { return false; } });
+  const total = LOGROS.length;
+  const pct = Math.round((desbloqueados.length / total) * 100);
+  const movsCount = (userData.movimientos||[]).length;
+  const racha = getRachaCarga();
+
+  el.innerHTML = `
+    <div class="logros-stats">
+      <div class="logro-stat">
+        <div class="logro-stat-num">${movsCount}</div>
+        <div class="logro-stat-label">Movimientos</div>
+      </div>
+      <div class="logro-stat">
+        <div class="logro-stat-num" style="color:${racha >= 7 ? 'var(--green)' : 'var(--accent)'}">${racha}</div>
+        <div class="logro-stat-label">Días racha</div>
+      </div>
+      <div class="logro-stat">
+        <div class="logro-stat-num" style="color:var(--purple)">${desbloqueados.length}/${total}</div>
+        <div class="logro-stat-label">Logros</div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text3);margin-bottom:6px">
+        <span>Progreso de logros</span>
+        <span style="font-weight:700;color:var(--accent)">${pct}%</span>
+      </div>
+      <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--purple));transition:width 0.6s"></div>
+      </div>
+    </div>
+
+    <div class="logros-grid">
+      ${LOGROS.map(l => {
+        const ok = desbloqueados.includes(l);
+        return `<div class="logro-card ${ok ? 'unlocked' : 'locked'}">
+          <span class="logro-emoji">${l.emoji}</span>
+          <div class="logro-titulo">${l.titulo}</div>
+          <div class="logro-desc">${l.desc}</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
 
 function mostrarOnboarding() {
   onboardingStep = 0;
