@@ -805,8 +805,62 @@ body {
   .modal-overlay { align-items: center; }
   .modal { border-radius: var(--radius-lg) !important; max-width: 520px !important; }
 }
+/* ── ONBOARDING ────────────────────────── */
+#onboarding-overlay { z-index: 600 !important; }
+.ob-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all 0.2s;
+}
+.ob-dot.active {
+  background: var(--accent);
+  width: 24px;
+  border-radius: 4px;
+}
+
+/* ── CHECK ANIMATION ─────────────────────── */
+.check-animation {
+  width: 100px;
+  height: 100px;
+  background: var(--green);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 60px;
+  color: white;
+  font-weight: 900;
+  animation: checkPop 0.6s cubic-bezier(0.5, 1.5, 0.4, 1) both;
+  box-shadow: 0 0 60px rgba(74,222,128,0.5);
+}
+@keyframes checkPop {
+  0%   { transform: scale(0) rotate(-180deg); opacity: 0; }
+  60%  { transform: scale(1.15) rotate(0deg); opacity: 1; }
+  80%  { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
 /* ── CATEGORY PICKER GRID ───────────────── */
 #cat-picker-overlay { z-index: 500 !important; }
+.cat-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text3);
+  margin: 14px 4px 8px;
+}
+.cat-section-label:first-child { margin-top: 0; }
+.cat-grid-inner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (max-width: 480px) {
+  .cat-grid-inner { grid-template-columns: repeat(3, 1fr); }
+}
 .mov-field-clickable {
   cursor: pointer;
   user-select: none;
@@ -2125,6 +2179,9 @@ body {
 
         <!-- DASHBOARD -->
         <div id="view-dashboard" class="view active">
+          <!-- Smart banner: última carga + motivación -->
+          <div id="smart-banner" style="display:none"></div>
+
           <div class="period-row">
             <div class="period-nav">
               <button class="period-btn" onclick="changePeriod(-1)">‹</button>
@@ -2164,6 +2221,9 @@ body {
               <span class="quick-tile-label">Por voz</span>
             </button>
           </div>
+
+          <!-- Movimientos recurrentes sugeridos -->
+          <div id="recurrentes-banner" style="display:none"></div>
 
           <div id="proj-banner" style="display:none" class="proj-banner">🔮 Proyección estimada para este período</div>
           <div class="stats-grid" id="stats-grid"></div>
@@ -2750,6 +2810,18 @@ body {
 
 </div><!-- /app -->
 
+<!-- Onboarding -->
+<div class="modal-overlay" id="onboarding-overlay" style="z-index:600;align-items:center">
+  <div class="modal modal-nuevo onboarding-modal" style="max-width:420px;text-align:center">
+    <div id="ob-emoji" style="font-size:72px;margin:20px 0 10px">👋</div>
+    <h2 id="ob-titulo" style="font-size:24px;font-weight:800;color:var(--text);margin-bottom:14px"></h2>
+    <p id="ob-texto" style="font-size:15px;color:var(--text2);line-height:1.5;margin-bottom:28px;padding:0 8px"></p>
+    <div id="ob-dots" style="display:flex;justify-content:center;gap:8px;margin-bottom:24px"></div>
+    <button class="btn-new" id="ob-cta" onclick="siguienteOnboarding()" style="width:100%;padding:14px;font-size:15px">Vamos</button>
+    <button class="link-btn" onclick="cerrarOnboarding()" style="margin-top:14px;color:var(--text3);font-size:12px">Saltar tutorial</button>
+  </div>
+</div>
+
 <!-- Modal selector de categoría -->
 <div class="modal-overlay" id="cat-picker-overlay" onclick="if(event.target===this)cerrarCategoriaPicker()">
   <div class="modal modal-nuevo" style="max-width:480px">
@@ -2867,7 +2939,7 @@ body {
     <div class="mov-fields">
       <div class="mov-field-row">
         <span class="mov-field-label">Concepto</span>
-        <input type="text" id="m-concepto" class="mov-field-input" placeholder="¿En qué?">
+        <input type="text" id="m-concepto" class="mov-field-input" placeholder="¿En qué?" oninput="autoCategorizarConcepto(this.value)">
       </div>
 
       <div class="mov-field-row mov-field-clickable" onclick="event.stopPropagation();abrirCategoriaPicker()">
@@ -3482,6 +3554,191 @@ function aplicarPlanAUI() {
 function showLockedFeature(featureName) {
   showToast(`🔒 "${featureName}" requiere el plan Completo. Mejorá tu plan desde Configuración.`);
 }
+
+// ══════════════════════════════════════════════
+//  SMART FEATURES (autocateg, recurrentes, racha)
+// ══════════════════════════════════════════════
+
+// Palabras clave → categoría
+const KEYWORDS_CAT = {
+  'Comida': ['super','coto','jumbo','carrefour','dia','disco','vea','almacen','verduleria','panaderia','mcdonald','burger','pizza','empanada','heladeria','restaurant','resto','starbucks','havanna','milanesa','asado','parrilla','sushi','pedidos','rappi','pedidosya','glovo','mercadito','dietetica'],
+  'Transporte': ['sube','taxi','uber','cabify','didi','colectivo','tren','subte','peaje','estacionamiento','garage','combustible','nafta','ypf','shell','axion','puma'],
+  'Suscripciones': ['netflix','spotify','disney','hbo','amazon prime','paramount','star','apple tv','youtube premium','chatgpt','claude','copilot','dropbox','onedrive','icloud','gym pass','adobe','canva','notion','figma'],
+  'Tecnología': ['mercadolibre','garbarino','fravega','musimundo','frávega','compumundo','rodo','apple','samsung','xiaomi','notebook','celular','accesorios','auriculares','teclado','mouse','monitor'],
+  'Salidas': ['cine','teatro','boliche','disco','pub','milonga','recital','show','entrada','ticketek','livepass','plateanet','bar'],
+  'Ropa': ['zara','h&m','falabella','vitamina','47 street','prune','levi','adidas','nike','indumentaria','remera','pantalon','zapatilla','calzado'],
+  'Vivienda': ['alquiler','expensas','luz','edenor','edesur','gas','metrogas','agua','aysa','abl','arba','rentas','municipalidad'],
+  'Telefono': ['claro','movistar','personal','tuenti','telecentro','cablevision','fibertel','arnet','wifi','internet','telefono'],
+  'Medico': ['farmacia','farmacity','medicus','swiss medical','galeno','osde','hospital','clinica','dentista','psicologo','psicologa','kinesio','remedios','medicamentos'],
+  'Estetica': ['peluqueria','barberia','manicura','pedicura','depilacion','spa','masaje','tintura','corte de pelo'],
+  'Mascotas': ['veterinaria','veterinario','mascota','dogchow','royal canin','whiskas','pet shop','peluqueria canina'],
+  'Estudios': ['universidad','colegio','escuela','curso','platzi','udemy','coursera','libros','utiles','libreria'],
+  'Regalos': ['regalo','cumpleaños','aniversario','dia de la madre','dia del padre','navidad','reyes'],
+  'Gastos hormiga': ['kiosko','golosina','caramelo','chocolate','gaseosa','medialuna','factura','cafe'],
+  'Deporte': ['gimnasio','gym','smartfit','sportclub','crossfit','pilates','yoga','natacion'],
+  'Juegos': ['steam','play station','xbox','nintendo','epic games','valorant','roblox','fortnite'],
+  'Viajes': ['avion','aerolineas','latam','jetsmart','flybondi','aeropuerto','hotel','airbnb','despegar','booking','almundo','turismo','viaje','excursion'],
+  'Automotor': ['mecanico','taller','autopartes','neumatico','aceite','patente','vtv','peaje','autoservice','grua','seguro auto'],
+};
+
+// Detecta categoría según el texto del concepto
+function detectarCategoria(concepto) {
+  if (!concepto) return null;
+  const txt = concepto.toLowerCase().trim();
+  // 1. Aprender del historial del usuario primero
+  const movs = userData.movimientos || [];
+  const matchHistorial = movs.find(m => {
+    const c = (m.concepto||'').toLowerCase().trim();
+    return c === txt || (c.length > 4 && txt.includes(c)) || (txt.length > 4 && c.includes(txt));
+  });
+  if (matchHistorial) return matchHistorial.categoria;
+  // 2. Si no, buscar por keywords
+  const cats = getUserCats();
+  for (const [cat, words] of Object.entries(KEYWORDS_CAT)) {
+    if (!cats.includes(cat)) continue;
+    for (const w of words) {
+      if (txt.includes(w)) return cat;
+    }
+  }
+  return null;
+}
+
+// Categorías más usadas
+function getCategoriasMasUsadas(limit) {
+  const counts = {};
+  (userData.movimientos || []).forEach(m => {
+    if (m.tipo === 'Gasto' && m.categoria) {
+      counts[m.categoria] = (counts[m.categoria] || 0) + 1;
+    }
+  });
+  return Object.entries(counts)
+    .sort(([,a],[,b]) => b - a)
+    .slice(0, limit || 6)
+    .map(([cat]) => cat);
+}
+
+// Detectar movimientos recurrentes (mensuales)
+function detectarRecurrentes() {
+  const movs = userData.movimientos || [];
+  const grupos = {};
+  movs.forEach(m => {
+    if (m.tipo !== 'Gasto') return;
+    const key = (m.concepto||'').toLowerCase().trim().replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, '');
+    if (!key) return;
+    if (!grupos[key]) grupos[key] = [];
+    grupos[key].push(m);
+  });
+  const recurrentes = [];
+  const hoy = new Date();
+  const esteMes = hoy.toISOString().slice(0,7);
+  Object.entries(grupos).forEach(([key, items]) => {
+    if (items.length < 2) return;
+    const meses = new Set(items.map(i => (i.fecha||'').slice(0,7)));
+    if (meses.size < 2) return;
+    if (meses.has(esteMes)) return;
+    const promedio = items.reduce((s,i) => s+Math.abs(i.importe||0), 0) / items.length;
+    const dias = items.map(i => parseInt((i.fecha||'').slice(8,10))).filter(d=>d>0);
+    const diaTipico = Math.round(dias.reduce((s,d)=>s+d,0)/dias.length);
+    recurrentes.push({
+      concepto: items[items.length-1].concepto.replace(/\s*\(\d+\/\d+\)\s*$/, '').replace(/\s*\(fijo.*\)\s*$/i, ''),
+      importeProm: promedio,
+      categoria: items[items.length-1].categoria,
+      billetera: items[items.length-1].billetera,
+      diaTipico,
+      vecesVisto: items.length,
+      meses: meses.size
+    });
+  });
+  return recurrentes.slice(0, 5);
+}
+
+// Sistema de racha
+function getRachaCarga() {
+  const movs = userData.movimientos || [];
+  if (!movs.length) return 0;
+  const hoy = new Date();
+  hoy.setHours(0,0,0,0);
+  let racha = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(hoy);
+    d.setDate(d.getDate() - i);
+    const fechaStr = d.toISOString().split('T')[0];
+    const cargoEseDia = movs.some(m => m.fecha === fechaStr);
+    if (cargoEseDia) racha++;
+    else if (i > 0) break;
+  }
+  return racha;
+}
+
+// Comparativa con mes anterior
+function getComparativaMes() {
+  const hoy = new Date();
+  const mesActual = hoy.toISOString().slice(0,7);
+  const mesAnt = new Date(hoy.getFullYear(), hoy.getMonth()-1, 1).toISOString().slice(0,7);
+  const movs = userData.movimientos || [];
+  const gastosActual = movs.filter(m => m.tipo==='Gasto' && (m.fecha||'').startsWith(mesActual)).reduce((s,m)=>s+Math.abs(m.importe||0),0);
+  const gastosAnt = movs.filter(m => m.tipo==='Gasto' && (m.fecha||'').startsWith(mesAnt)).reduce((s,m)=>s+Math.abs(m.importe||0),0);
+  if (gastosAnt === 0) return null;
+  const diff = ((gastosActual - gastosAnt) / gastosAnt) * 100;
+  return { actual: gastosActual, anterior: gastosAnt, porcentaje: diff };
+}
+
+// Mensaje motivacional según contexto
+function getMensajeMotivacional() {
+  const racha = getRachaCarga();
+  const comp = getComparativaMes();
+  if (racha >= 30) return {icon:'🔥', text:`¡Llevás ${racha} días seguidos! Imparable.`, color:'var(--green)'};
+  if (racha >= 7)  return {icon:'🔥', text:`Racha de ${racha} días — seguí así`, color:'var(--yellow)'};
+  if (racha >= 3)  return {icon:'✨', text:`Cargaste ${racha} días seguidos`, color:'var(--accent)'};
+  if (comp && comp.porcentaje < -10) return {icon:'👏', text:`Gastaste ${Math.abs(comp.porcentaje).toFixed(0)}% menos que el mes pasado`, color:'var(--green)'};
+  if (comp && comp.porcentaje > 20)  return {icon:'⚠️', text:`Vas ${comp.porcentaje.toFixed(0)}% sobre el mes anterior`, color:'var(--yellow)'};
+  return null;
+}
+
+// Último movimiento cargado
+function getUltimoMovimiento() {
+  const movs = (userData.movimientos || []).slice().sort((a,b) => (b.id||0) - (a.id||0));
+  return movs[0] || null;
+}
+
+function tiempoAtras(timestamp) {
+  if (!timestamp) return '';
+  const diff = Date.now() - timestamp;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'recién';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `hace ${d}d`;
+  return new Date(timestamp).toLocaleDateString('es-AR');
+}
+
+// Recordatorio diario (notificación local)
+function programarRecordatorioDiario() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  const ahora = new Date();
+  const objetivo = new Date(ahora);
+  objetivo.setHours(21, 0, 0, 0);
+  if (objetivo <= ahora) objetivo.setDate(objetivo.getDate() + 1);
+  const ms = objetivo - ahora;
+  setTimeout(() => {
+    const hoy = new Date().toISOString().split('T')[0];
+    const cargoHoy = (userData.movimientos||[]).some(m => m.fecha === hoy);
+    if (!cargoHoy) {
+      try {
+        new Notification('💰 ¿Cargaste lo del día?', {
+          body: 'Abrí FlowCash y registrá los gastos en 10 segundos',
+          icon: '/icon-192.png',
+          tag: 'recordatorio-diario'
+        });
+      } catch(e) {}
+    }
+    programarRecordatorioDiario();
+  }, ms);
+}
+
 let currentPeriod = {year: new Date().getFullYear(), month: new Date().getMonth()};
 let activeFilter = 'Todos';
 let chartCat=null, chartEvo=null, chartAnual=null;
@@ -3894,6 +4151,20 @@ function launchApp() {
   loadSavedTheme();
   renderThemePanel();
   aplicarPlanAUI(); // Aplicar restricciones del plan
+
+  // Pedir permiso de notificaciones (silencioso si ya está respondido)
+  if ('Notification' in window && Notification.permission === 'default') {
+    setTimeout(() => Notification.requestPermission().then(() => programarRecordatorioDiario()), 5000);
+  } else if (Notification?.permission === 'granted') {
+    programarRecordatorioDiario();
+  }
+
+  // Onboarding para usuarios nuevos (sin movimientos)
+  if (!userData.movimientos || userData.movimientos.length === 0) {
+    if (!localStorage.getItem('fc_onboarding_visto')) {
+      setTimeout(mostrarOnboarding, 800);
+    }
+  }
   updateNotifBadge();
   // Cargar config global PRIMERO (URLs de promos, backup, notificaciones)
   cargarConfigGlobal().then(() => {
@@ -3991,6 +4262,9 @@ function renderAll() {
   const label = MESES[currentPeriod.month] + ' ' + currentPeriod.year;
   const l1 = document.getElementById('period-label');  if(l1) l1.textContent = label;
   const l2 = document.getElementById('period-label2'); if(l2) l2.textContent = label;
+  // Smart banners (solo en dashboard)
+  try { renderSmartBanner(); } catch(e){}
+  try { renderRecurrentesBanner(); } catch(e){}
   const active = document.querySelector('.view.active');
   if (!active) return;
   showView(active.id.replace('view-',''));
@@ -5106,12 +5380,200 @@ async function guardarBulk() {
     .catch(() => showToast(`✅ ${nuevos.length} guardados localmente`));
 }
 
+function renderSmartBanner() {
+  const banner = document.getElementById('smart-banner');
+  if (!banner) return;
+  const ultimo = getUltimoMovimiento();
+  const motiv = getMensajeMotivacional();
+  let html = '';
+
+  if (motiv) {
+    html += `<div class="smart-motiv" style="background:linear-gradient(90deg,${motiv.color}22,${motiv.color}08);border-left:3px solid ${motiv.color};padding:10px 14px;border-radius:var(--radius-sm);margin-bottom:8px;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px">
+      <span style="font-size:18px">${motiv.icon}</span>
+      <span style="color:${motiv.color}">${motiv.text}</span>
+    </div>`;
+  }
+
+  if (ultimo) {
+    const cuandoStr = tiempoAtras(ultimo.id);
+    const colorTipo = ultimo.tipo === 'Gasto' ? 'var(--red)' : ultimo.tipo === 'Ingreso' ? 'var(--green)' : 'var(--accent)';
+    html += `<div class="smart-last" style="display:flex;align-items:center;gap:10px;padding:8px 14px;background:var(--surface2);border-radius:var(--radius-sm);margin-bottom:14px;font-size:12px">
+      <span style="color:var(--text3);flex-shrink:0">Última carga:</span>
+      <span style="color:var(--text);font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ultimo.concepto}</span>
+      <span style="color:${colorTipo};font-family:var(--mono);font-weight:700;flex-shrink:0">${fmtARS(ultimo.importe)}</span>
+      <span style="color:var(--text3);flex-shrink:0">${cuandoStr}</span>
+    </div>`;
+  }
+
+  banner.innerHTML = html;
+  banner.style.display = html ? '' : 'none';
+}
+
+function renderRecurrentesBanner() {
+  const banner = document.getElementById('recurrentes-banner');
+  if (!banner) return;
+  const recurrentes = detectarRecurrentes();
+  if (!recurrentes.length) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = '';
+  banner.innerHTML = `
+    <div class="card" style="margin-bottom:16px;border-color:rgba(56,189,248,0.25);background:linear-gradient(180deg,rgba(56,189,248,0.04),transparent)">
+      <div class="card-header" style="margin-bottom:10px">
+        <span class="card-title">💡 Te falta cargar este mes</span>
+        <span style="font-size:11px;color:var(--text3)">${recurrentes.length} sugerencia${recurrentes.length>1?'s':''}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${recurrentes.map((r,i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius-sm)">
+            <span style="font-size:18px;flex-shrink:0">${CAT_ICONS[r.categoria]||'📦'}</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:13px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.concepto}</div>
+              <div style="font-size:11px;color:var(--text3)">~${fmtARS(r.importeProm)} · día ${r.diaTipico} · ${r.meses} meses</div>
+            </div>
+            <button class="btn-secondary" style="padding:5px 10px;font-size:11px;color:var(--green);border-color:rgba(74,222,128,0.3);flex-shrink:0" onclick="cargarRecurrente(${i})">+ Cargar</button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+  // Guardar para cargarRecurrente
+  window._recurrentesCache = recurrentes;
+}
+
+function cargarRecurrente(idx) {
+  const r = (window._recurrentesCache || [])[idx];
+  if (!r) return;
+  const hoy = new Date().toISOString().split('T')[0];
+  const nuevo = {
+    id: Date.now(),
+    fecha: hoy,
+    tipo: 'Gasto',
+    concepto: r.concepto,
+    categoria: r.categoria,
+    billetera: r.billetera || getUserWallets()[0],
+    importe: r.importeProm,
+    estado: 'Pagado'
+  };
+  userData.movimientos = (userData.movimientos || []);
+  userData.movimientos.push(nuevo);
+  renderAll();
+  updateNotifBadge();
+  saveToFirestore()
+    .then(() => showToast(`✅ ${r.concepto} cargado`))
+    .catch(() => showToast(`✅ ${r.concepto} guardado localmente`));
+  mostrarConfirmacionAnimada();
+}
+
+function mostrarConfirmacionAnimada() {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:9999';
+  overlay.innerHTML = '<div class="check-animation">✓</div>';
+  document.body.appendChild(overlay);
+  setTimeout(() => overlay.remove(), 800);
+}
+
+function autoCategorizarConcepto(texto) {
+  if (!texto || texto.length < 3) return;
+  if (document.getElementById('m-categoria-manual')?.value === '1') return;
+  const detectada = detectarCategoria(texto);
+  if (detectada && detectada !== document.getElementById('m-categoria').value) {
+    seleccionarCategoria(detectada);
+    const icono = document.getElementById('m-categoria-icono');
+    if (icono) {
+      icono.style.transition = 'transform 0.4s';
+      icono.style.transform = 'scale(1.4)';
+      setTimeout(() => icono.style.transform = 'scale(1)', 400);
+    }
+  }
+}
+
+// ── ONBOARDING ─────────────────────────────
+let onboardingStep = 0;
+const ONBOARDING_STEPS = [
+  {
+    emoji: '👋',
+    titulo: 'Bienvenido a FlowCash',
+    texto: 'Ordenamos tu plata sin que te tengas que volver loco con planillas. Te muestro cómo funciona en 30 segundos.',
+    cta: 'Vamos'
+  },
+  {
+    emoji: '💰',
+    titulo: 'Cargá tus gastos en segundos',
+    texto: 'Tocá "+ Nuevo" o un tile del dashboard. Si escribís "Spotify", la app detecta sola que es Suscripciones. Si tenés que cargar el ticket del súper, sacale foto y listo.',
+    cta: 'Siguiente'
+  },
+  {
+    emoji: '📊',
+    titulo: 'Mirá tu plata en vivo',
+    texto: 'Tu dashboard se actualiza al instante. Gráficos, comparativas con el mes anterior, y un asesor con IA que te dice en qué gastás más.',
+    cta: 'Empezar'
+  }
+];
+
+function mostrarOnboarding() {
+  onboardingStep = 0;
+  renderOnboarding();
+  document.getElementById('onboarding-overlay').classList.add('open');
+}
+
+function renderOnboarding() {
+  const step = ONBOARDING_STEPS[onboardingStep];
+  if (!step) { cerrarOnboarding(); return; }
+  document.getElementById('ob-emoji').textContent = step.emoji;
+  document.getElementById('ob-titulo').textContent = step.titulo;
+  document.getElementById('ob-texto').textContent = step.texto;
+  document.getElementById('ob-cta').textContent = step.cta;
+  // Dots
+  const dots = document.getElementById('ob-dots');
+  dots.innerHTML = ONBOARDING_STEPS.map((_,i) =>
+    `<span class="ob-dot${i === onboardingStep ? ' active' : ''}"></span>`
+  ).join('');
+}
+
+function siguienteOnboarding() {
+  onboardingStep++;
+  if (onboardingStep >= ONBOARDING_STEPS.length) {
+    cerrarOnboarding();
+  } else {
+    renderOnboarding();
+  }
+}
+
+function cerrarOnboarding() {
+  document.getElementById('onboarding-overlay').classList.remove('open');
+  localStorage.setItem('fc_onboarding_visto', '1');
+}
+
 function abrirCategoriaPicker() {
   const cats = getUserCats();
   const actual = document.getElementById('m-categoria').value;
   const grid = document.getElementById('cat-picker-grid');
   if (!grid) return;
-  grid.innerHTML = cats.map(cat => {
+  // Categorías más usadas (top 6) primero, después el resto
+  const masUsadas = getCategoriasMasUsadas(6).filter(c => cats.includes(c));
+  const resto = cats.filter(c => !masUsadas.includes(c));
+  const ordenadas = [...masUsadas, ...resto];
+
+  let html = '';
+  if (masUsadas.length > 0) {
+    html += '<div class="cat-section-label">Las que más usás</div>';
+    html += '<div class="cat-grid-inner">';
+    html += masUsadas.map(cat => {
+      const icono = CAT_ICONS[cat] || '📦';
+      const sel = cat === actual ? ' selected' : '';
+      const safe = cat.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+      return `<div class="cat-item${sel}" data-cat="${safe}">
+        <span class="cat-item-icon">${icono}</span>
+        <span class="cat-item-name">${cat}</span>
+      </div>`;
+    }).join('');
+    html += '</div>';
+    html += '<div class="cat-section-label">Todas</div>';
+  }
+  html += '<div class="cat-grid-inner">';
+  html += resto.map(cat => {
     const icono = CAT_ICONS[cat] || '📦';
     const sel = cat === actual ? ' selected' : '';
     const safe = cat.replace(/'/g, "\\'").replace(/"/g, '&quot;');
@@ -5120,12 +5582,14 @@ function abrirCategoriaPicker() {
       <span class="cat-item-name">${cat}</span>
     </div>`;
   }).join('');
-  // Wire clicks via addEventListener (más confiable que onclick inline)
+  html += '</div>';
+  grid.innerHTML = html;
+
   grid.querySelectorAll('.cat-item').forEach(el => {
     el.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      seleccionarCategoria(el.dataset.cat);
+      seleccionarCategoria(el.dataset.cat, true); // true = manual
     });
   });
   document.getElementById('cat-picker-overlay').classList.add('open');
@@ -5135,7 +5599,7 @@ function cerrarCategoriaPicker() {
   document.getElementById('cat-picker-overlay').classList.remove('open');
 }
 
-function seleccionarCategoria(cat) {
+function seleccionarCategoria(cat, manual) {
   if (!cat) return;
   const icono = CAT_ICONS[cat] || '📦';
   const hidden = document.getElementById('m-categoria');
@@ -5144,6 +5608,17 @@ function seleccionarCategoria(cat) {
   if (hidden) hidden.value = cat;
   if (txt) txt.textContent = cat;
   if (ico) ico.textContent = icono;
+  // Si fue selección manual, marcar para que autoCategorizar no la pise
+  if (manual) {
+    let flag = document.getElementById('m-categoria-manual');
+    if (!flag) {
+      flag = document.createElement('input');
+      flag.type = 'hidden';
+      flag.id = 'm-categoria-manual';
+      document.getElementById('modal-overlay').appendChild(flag);
+    }
+    flag.value = '1';
+  }
   cerrarCategoriaPicker();
 }
 
@@ -5309,6 +5784,9 @@ function openModal(){
   // Categoría por defecto
   const primeraCat = getUserCats()[0] || 'Comida';
   seleccionarCategoria(primeraCat);
+  // Resetear flag de selección manual
+  const flag = document.getElementById('m-categoria-manual');
+  if (flag) flag.value = '';
   document.getElementById('modal-overlay').classList.add('open');
 }
 function closeModalOutside(e){if(e.target===document.getElementById('modal-overlay'))document.getElementById('modal-overlay').classList.remove('open');}
@@ -5388,6 +5866,7 @@ function saveMovimiento(){
   userData.movimientos.push(...nuevos);
   document.getElementById('modal-overlay').classList.remove('open');
   renderAll();updateNotifBadge();
+  if (!editingId) mostrarConfirmacionAnimada();
   saveToFirestore().then(()=>showToast(editingId?'✅ Actualizado':`✅ ${nuevos.length>1?nuevos.length+' guardados':'Guardado'}`)).catch(()=>showToast(editingId?'✅ Actualizado (local)':`✅ Guardado localmente`));
 }
 
